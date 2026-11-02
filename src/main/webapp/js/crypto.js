@@ -14,14 +14,19 @@
   limitations under the License.
 */
 
-// The formats below are unchanged since 2012, so all existing data stays readable.
+// All formats ever written stay readable.
 //
 // AES_256_CBC_HMAC_SHA256 (names, descriptions and values, using a key's 32 byte raw secret):
 //   AES-256-CBC with PKCS#7 padding and a random 16 byte IV. The signature is HMAC-SHA256 over
-//   iv || cleartext, using the same raw secret as HMAC key.
+//   iv || cleartext, using the same raw secret as HMAC key. Unchanged since 2012.
 //
-// PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256 (a key's raw secret, wrapped with a passphrase):
+// PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256 (a key's raw secret, wrapped with a passphrase):
+//   as above, keyed with PBKDF2-HMAC-SHA512(utf8(passphrase), salt = iv, 210000 iterations).
+//   Written since 2026; 210000 iterations of SHA-512 is OWASP's recommendation for PBKDF2.
+//
+// PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256 (legacy, a key's raw secret wrapped with a passphrase):
 //   as above, keyed with PBKDF2-HMAC-SHA1(utf8(passphrase), salt = iv, 1000 iterations).
+//   Written until 2026, still read.
 
 /**
  * @typedef {object} EncryptedValue
@@ -33,8 +38,14 @@
  */
 
 const VALUE_ALGORITHM = 'AES_256_CBC_HMAC_SHA256';
-const PASSPHRASE_ALGORITHM = 'PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256';
-const PBKDF2_ITERATIONS = 1000;
+const PASSPHRASE_ALGORITHM = 'PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256';
+const LEGACY_PASSPHRASE_ALGORITHM = 'PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256';
+
+/** @type {Record<string, {hash: string, iterations: number} | undefined>} */
+const PASSPHRASE_KEY_DERIVATIONS = {
+  [PASSPHRASE_ALGORITHM]: {hash: 'SHA-512', iterations: 210_000},
+  [LEGACY_PASSPHRASE_ALGORITHM]: {hash: 'SHA-1', iterations: 1000},
+};
 
 /** Thrown when a value cannot be decrypted with the given key: wrong key, or tampered data. */
 export class DecryptionError extends Error {}
@@ -74,7 +85,16 @@ export async function decrypt(rawSecret, value) {
  */
 export async function wrapSecret(passphrase, rawSecret) {
   const salt = randomIv();
-  return encryptBytes(await derivePassphraseKey(passphrase, salt), rawSecret, PASSPHRASE_ALGORITHM, salt);
+  return encryptBytes(
+      await derivePassphraseKey(passphrase, salt, PASSPHRASE_ALGORITHM), rawSecret, PASSPHRASE_ALGORITHM, salt);
+}
+
+/**
+ * @param {EncryptedValue} value a key's raw secret, wrapped with a passphrase
+ * @returns {boolean} whether it uses the weak legacy key derivation, and should be replaced
+ */
+export function isLegacyEncryption(value) {
+  return value.algorithm === LEGACY_PASSPHRASE_ALGORITHM;
 }
 
 /**
@@ -83,11 +103,11 @@ export async function wrapSecret(passphrase, rawSecret) {
  * @returns {Promise<Uint8Array<ArrayBuffer> | null>} the raw secret, or null if the passphrase does not match
  */
 export async function unwrapSecret(passphrase, value) {
-  if (value.algorithm !== PASSPHRASE_ALGORITHM) {
+  if (!PASSPHRASE_KEY_DERIVATIONS[value.algorithm]) {
     return null;
   }
   try {
-    return await decryptBytes(await derivePassphraseKey(passphrase, fromBase64(value.iv)), value);
+    return await decryptBytes(await derivePassphraseKey(passphrase, fromBase64(value.iv), value.algorithm), value);
   } catch (e) {
     if (e instanceof DecryptionError) {
       return null;
@@ -99,8 +119,13 @@ export async function unwrapSecret(passphrase, value) {
 /**
  * @param {string} passphrase
  * @param {Uint8Array<ArrayBuffer>} salt
+ * @param {string} algorithm one of the passphrase algorithms
  */
-async function derivePassphraseKey(passphrase, salt) {
+async function derivePassphraseKey(passphrase, salt, algorithm) {
+  const derivation = PASSPHRASE_KEY_DERIVATIONS[algorithm];
+  if (!derivation) {
+    throw new Error('unsupported algorithm: ' + algorithm);
+  }
   let baseKey;
   try {
     baseKey = await crypto.subtle.importKey(
@@ -110,7 +135,7 @@ async function derivePassphraseKey(passphrase, salt) {
     throw new DecryptionError('unsupported passphrase');
   }
   const bits = await crypto.subtle.deriveBits(
-      {name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-1'}, baseKey, 256);
+      {name: 'PBKDF2', salt, iterations: derivation.iterations, hash: derivation.hash}, baseKey, 256);
   return new Uint8Array(bits);
 }
 

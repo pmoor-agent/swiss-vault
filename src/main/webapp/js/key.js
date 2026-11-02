@@ -14,7 +14,7 @@
   limitations under the License.
 */
 
-import {decrypt, encrypt, newRawSecret, unwrapSecret, wrapSecret} from './crypto.js';
+import {decrypt, encrypt, isLegacyEncryption, newRawSecret, unwrapSecret, wrapSecret} from './crypto.js';
 
 /** @typedef {import('./api.js').KeyJson} KeyJson */
 /** @typedef {import('./crypto.js').EncryptedValue} EncryptedValue */
@@ -72,8 +72,12 @@ export class Key {
   async unlock(passphrase) {
     this.rawSecret = null;
     this.usedEncryption = -1;
-    for (const [index, encryption] of this.encryptions.entries()) {
-      const rawSecret = await unwrapSecret(passphrase, encryption);
+    // current encryptions first: once the same passphrase has a current and a legacy encryption, the
+    // current one counts as used, which leaves the legacy one deletable
+    const indexes = [...this.encryptions.keys()].sort(
+        (a, b) => Number(isLegacyEncryption(this.encryptions[a])) - Number(isLegacyEncryption(this.encryptions[b])));
+    for (const index of indexes) {
+      const rawSecret = await unwrapSecret(passphrase, this.encryptions[index]);
       if (rawSecret) {
         this.rawSecret = rawSecret;
         this.usedEncryption = index;
@@ -84,13 +88,14 @@ export class Key {
   }
 
   /**
-   * Adds a passphrase that unlocks this key, unless it already does.
+   * Adds a passphrase that unlocks this key, unless it already does with a current encryption. Adding
+   * a passphrase that only unlocks a legacy encryption upgrades it: the legacy one can then be deleted.
    *
    * @param {string} passphrase
    */
   async addPassphrase(passphrase) {
     for (const encryption of this.encryptions) {
-      if (await unwrapSecret(passphrase, encryption)) {
+      if (!isLegacyEncryption(encryption) && await unwrapSecret(passphrase, encryption)) {
         return;
       }
     }

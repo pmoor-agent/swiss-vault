@@ -26,8 +26,21 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 __author__ = 'pmoor'
 
 VALUE_ALGORITHM = "AES_256_CBC_HMAC_SHA256"
-PASSPHRASE_ALGORITHM = "PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256"
-PBKDF2_ITERATIONS = 1000
+# written for new passphrases
+PASSPHRASE_ALGORITHM = "PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256"
+# written until 2026, still read
+LEGACY_PASSPHRASE_ALGORITHM = "PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256"
+
+# PBKDF2 hash and iterations per passphrase algorithm
+PASSPHRASE_KEY_DERIVATIONS = {
+  PASSPHRASE_ALGORITHM: ("sha512", 210000),
+  LEGACY_PASSPHRASE_ALGORITHM: ("sha1", 1000),
+}
+
+
+def _derivePassphraseKey(passphrase: str, salt: bytes, algorithm: str) -> bytes:
+  hash_name, iterations = PASSPHRASE_KEY_DERIVATIONS[algorithm]
+  return hashlib.pbkdf2_hmac(hash_name, passphrase.encode('utf-8'), salt, iterations, 32)
 
 
 def _pad(data: bytes) -> bytes:
@@ -68,8 +81,7 @@ def createEncryption(secret_key: bytes, value: Union[str, bytes]) -> Dict[str, A
 
 def createEncryptionWithPassphrase(secret_key: bytes, passphrase: str) -> Dict[str, Any]:
   iv_and_salt = secrets.token_bytes(16)
-  password_derived_key = hashlib.pbkdf2_hmac(
-      'sha1', passphrase.encode('utf-8'), iv_and_salt, PBKDF2_ITERATIONS, 32)
+  password_derived_key = _derivePassphraseKey(passphrase, iv_and_salt, PASSPHRASE_ALGORITHM)
 
   cipher = Cipher(algorithms.AES(password_derived_key), modes.CBC(iv_and_salt))
   encryptor = cipher.encryptor()
@@ -88,15 +100,15 @@ def createEncryptionWithPassphrase(secret_key: bytes, passphrase: str) -> Dict[s
 
 def extractSecretKey(key_resource: Dict[str, Any], passphrase: str) -> Optional[bytes]:
   for encryption in key_resource.get("encryptions", []):
-    if encryption.get("algorithm") != PASSPHRASE_ALGORITHM:
+    algorithm = encryption.get("algorithm")
+    if algorithm not in PASSPHRASE_KEY_DERIVATIONS:
       continue
 
     iv = base64.b64decode(encryption["iv"])
     ciphertext = base64.b64decode(encryption["ciphertext"])
     signature = base64.b64decode(encryption["signature"])
 
-    password_derived_key = hashlib.pbkdf2_hmac(
-        'sha1', passphrase.encode('utf-8'), iv, PBKDF2_ITERATIONS, 32)
+    password_derived_key = _derivePassphraseKey(passphrase, iv, algorithm)
 
     try:
       cipher = Cipher(algorithms.AES(password_derived_key), modes.CBC(iv))

@@ -16,6 +16,10 @@
 package ws.moor.swissvault.domain;
 
 public enum EncryptionAlgorithm {
+  /** Legacy: a key's raw secret, wrapped with PBKDF2-HMAC-SHA1 (1000 iterations). Still read, no longer written. */
   PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256,
+  /** A key's raw secret, wrapped with PBKDF2-HMAC-SHA512 (210000 iterations). */
+  PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256,
+  /** Names, descriptions and values, encrypted with a key's raw secret. */
   AES_256_CBC_HMAC_SHA256,
 }

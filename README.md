@@ -29,6 +29,15 @@ All encryption happens in the browser (`crypto.js`), the server only ever sees
 ciphertext. `src/test/resources/legacy-client-data.json` holds data written by
 the original 2012 client; `ClientTest` makes sure it stays readable.
 
+### Upgrading passphrases
+
+Passphrases added since 2026 are stretched with PBKDF2-HMAC-SHA512 (210,000
+iterations); older ones with PBKDF2-HMAC-SHA1 (1,000 iterations), shown as
+"(legacy)" in the Edit Key dialog. To upgrade one: open "edit" for the key, enter
+the passphrase and press "try", add the same passphrase again under "Add
+Passphrase", then delete the "(legacy)" encryption. Each user's encryptions are
+separate, so everyone sharing a key upgrades their own.
+
 ## Running locally
 
     mvn package

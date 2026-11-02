@@ -207,6 +207,7 @@ class RoundTripTest(unittest.TestCase):
 
     passphrase = "correct horse battery staple 🔑"
     wrapped = crypto.createEncryptionWithPassphrase(secret_key, passphrase)
+    self.assertEqual(crypto.PASSPHRASE_ALGORITHM, wrapped["algorithm"])
     key_resource = {"encryptions": [wrapped]}
 
     extracted = crypto.extractSecretKey(key_resource, passphrase)
@@ -216,6 +217,38 @@ class RoundTripTest(unittest.TestCase):
     enc_val = crypto.createEncryption(secret_key, "Secret Message with Unicode: 🚀🔒")
     dec_val = crypto.decryptSecret(enc_val, secret_key)
     self.assertEqual("Secret Message with Unicode: 🚀🔒", dec_val)
+
+
+class BrowserClientDataTest(unittest.TestCase):
+  """A key's raw secret wrapped by the browser client (crypto.js) with the current algorithm."""
+
+  PASSPHRASE = 'zweites Passwort ä 🔑'
+  RAW_SECRET = bytes.fromhex("00070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9")
+  ENCRYPTION = {
+    "version": 0,
+    "algorithm": "PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256",
+    "iv": "7aVNClbJ8UW5oC/JfwreHw==",
+    "ciphertext": "YMpFKl5YbOduSBqm0svutQVGOftITHjtTjDh2HPSgmnVzf9gdbEadKn2t3TtrTyL",
+    "signature": "VJwuTVlOVmNtxIG5w4ET7wJx97Pf2ilW8CqSSBhCxQU=",
+  }
+  VALUE = {
+    "version": 0,
+    "algorithm": "AES_256_CBC_HMAC_SHA256",
+    "iv": "UcWfTNqPk1379nMkR2K2GA==",
+    "ciphertext": "mY7DFyxj+m6yB/OuWnAstCeMf9gbOzTp+o4PAreowBQ=",
+    "signature": "PBgjR+xQVFS7aYr3eQcXix/cTWS1zM+F1enaq6iTHm4=",
+  }
+
+  def test_unwraps_current_algorithm(self):
+    key_resource = {"encryptions": [self.ENCRYPTION]}
+    self.assertEqual(self.RAW_SECRET, crypto.extractSecretKey(key_resource, self.PASSPHRASE))
+    self.assertIsNone(crypto.extractSecretKey(key_resource, "wrong-passphrase"))
+    self.assertEqual("written by crypto.js", crypto.decryptSecret(self.VALUE, self.RAW_SECRET))
+
+  def test_skips_unknown_algorithms(self):
+    unknown = dict(self.ENCRYPTION, algorithm="SOMETHING_NEW")
+    key_resource = {"encryptions": [unknown, self.ENCRYPTION]}
+    self.assertEqual(self.RAW_SECRET, crypto.extractSecretKey(key_resource, self.PASSPHRASE))
 
 
 if __name__ == '__main__':
