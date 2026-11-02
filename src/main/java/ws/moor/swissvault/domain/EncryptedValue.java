@@ -28,8 +28,6 @@ import java.util.List;
 
 public class EncryptedValue {
 
-  public static final int IV_LENGTH_BYTES = 16;
-  public static final int SIGNATURE_LENGTH_BYTES = 32;
   public static final int MAX_CIPHERTEXT_BYTES = 64 * 1024;
   public static final int MAX_ENCRYPTIONS = 16;
 
@@ -41,7 +39,7 @@ public class EncryptedValue {
   public EncryptedValue(EncryptionAlgorithm algorithm, byte[] iv, byte[] ciphertext, byte[] signature) {
     Preconditions.checkArgument(algorithm != null, "algorithm cannot be null");
     Preconditions.checkArgument(
-        iv != null && iv.length == IV_LENGTH_BYTES,
+        iv != null && iv.length == algorithm.getIvLengthBytes(),
         "invalid iv length: %s",
         iv == null ? "null" : iv.length);
     Preconditions.checkArgument(
@@ -49,7 +47,7 @@ public class EncryptedValue {
         "invalid ciphertext length: %s",
         ciphertext == null ? "null" : ciphertext.length);
     Preconditions.checkArgument(
-        signature != null && signature.length == SIGNATURE_LENGTH_BYTES,
+        signature != null && signature.length == algorithm.getSignatureLengthBytes(),
         "invalid signature length: %s",
         signature == null ? "null" : signature.length);
     this.algorithm = algorithm;

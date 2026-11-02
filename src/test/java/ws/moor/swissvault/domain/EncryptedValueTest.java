@@ -43,6 +43,22 @@ public class EncryptedValueTest {
   }
 
   @Test
+  public void testEncryptionAlgorithmProperties() {
+    for (EncryptionAlgorithm algo : EncryptionAlgorithm.values()) {
+      assertThat(algo.getIvLengthBytes()).isEqualTo(16);
+      assertThat(algo.getSignatureLengthBytes()).isEqualTo(32);
+    }
+  }
+
+  @Test
+  public void testConstructor_allAlgorithmsValid() {
+    for (EncryptionAlgorithm algo : EncryptionAlgorithm.values()) {
+      EncryptedValue ev = new EncryptedValue(algo, VALID_IV, VALID_CIPHERTEXT, VALID_SIGNATURE);
+      assertThat(ev.getAlgorithm()).isEqualTo(algo);
+    }
+  }
+
+  @Test
   public void testConstructor_validArguments() {
     EncryptedValue ev = new EncryptedValue(ALGORITHM, VALID_IV, VALID_CIPHERTEXT, VALID_SIGNATURE);
     assertThat(ev.getAlgorithm()).isEqualTo(ALGORITHM);
