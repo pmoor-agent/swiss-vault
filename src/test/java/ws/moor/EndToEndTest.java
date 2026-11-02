@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
 @Category(Integration.class)
 public class EndToEndTest {
@@ -83,6 +84,37 @@ public class EndToEndTest {
     Truth.assertThat(setCookie).contains("Path=/");
     Truth.assertThat(setCookie).contains("HttpOnly");
     Truth.assertThat(setCookie).contains("SameSite=Lax");
+
+    connection.disconnect();
+  }
+
+  @Test
+  public void logoutClearsCookieAndRendersPage() throws IOException {
+    HttpURLConnection connection = (HttpURLConnection) new URL(DevServer.BASE_URL + "/logout").openConnection();
+    connection.setRequestProperty("Cookie", "auth=" + TestCookies.authCookieValue("test-user-logout"));
+    connection.setInstanceFollowRedirects(false);
+
+    Truth.assertThat(connection.getResponseCode()).isEqualTo(HttpURLConnection.HTTP_OK);
+    Truth.assertThat(connection.getContentType()).matches("(?i)text/html;\\s*charset=utf-8");
+    Truth.assertThat(connection.getHeaderField("Cache-Control")).isEqualTo("no-store");
+    Truth.assertThat(connection.getHeaderField("Strict-Transport-Security")).isEqualTo("max-age=7776000; includeSubDomains");
+    Truth.assertThat(connection.getHeaderField("X-Content-Type-Options")).isEqualTo("nosniff");
+
+    String setCookie = connection.getHeaderField("Set-Cookie");
+    Truth.assertThat(setCookie).isNotNull();
+    Truth.assertThat(setCookie).isEqualTo("auth=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
+
+    StringBuilder body = new StringBuilder();
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        body.append(line).append("\n");
+      }
+    }
+    Truth.assertThat(body.toString()).contains("<title>Swiss Vault - Logged Out</title>");
+    Truth.assertThat(body.toString()).contains("<h2>Logged Out</h2>");
+    Truth.assertThat(body.toString()).contains("<p>You have been logged out of Swiss Vault.</p>");
+    Truth.assertThat(body.toString()).contains("<p><a href=\"/\">Log in again</a></p>");
 
     connection.disconnect();
   }

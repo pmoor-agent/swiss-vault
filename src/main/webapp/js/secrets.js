@@ -50,7 +50,10 @@ export async function showSecrets(key) {
   // some browsers clear search fields on escape without an input event
   search.addEventListener('search', filter);
 
-  document.body.append(h('div', {class: 'searchBar'}, search), list, h('div', {class: 'mainOptions'},
+  document.body.append(
+      h('div', {class: 'searchBar'}, search, h('a', {href: '/logout', class: 'link'}, 'logout')),
+      list,
+      h('div', {class: 'mainOptions'},
       button('new secret', () => {
         const pane = new SecretPane(key, null);
         panes.push(pane);
