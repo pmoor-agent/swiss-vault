@@ -107,15 +107,18 @@ public class SecretRepository {
     Key secretKey = KeyFactory.createKey(
             KeyFactory.createKey("Key", keyId),
             "Secret", secretId);
-    ds.delete(t, secretKey);
 
     Query q = new Query("SecretProperty");
     q.setAncestor(secretKey);
+    q.setKeysOnly();
     PreparedQuery pq = ds.prepare(t, q);
 
+    List<Key> keys = Lists.newArrayList();
+    keys.add(secretKey);
     for (Entity property : pq.asIterable()) {
-      ds.delete(t, property.getKey());
+      keys.add(property.getKey());
     }
+    ds.delete(t, keys);
   }
 
   public void update(Transaction t, DbSecretProperty property) {
