@@ -122,7 +122,7 @@ public class KeyRepository {
       List<EncryptedValue> encryptions = EncryptedValue.fromJsonArray(json.getAsJsonArray("encryptions"));
 
       dbKey.update(name, description);
-      ds.put(dbKey.entity);
+      ds.put(transaction, dbKey.entity);
 
       Query q = new Query("KeyAcl", keyKey);
       PreparedQuery pq = ds.prepare(transaction, q);
@@ -132,7 +132,7 @@ public class KeyRepository {
         DbKeyAcl acl = new DbKeyAcl(entity);
         if (acl.getUserId().equals(userId)) {
           acl.update(encryptions);
-          ds.put(acl.entity);
+          ds.put(transaction, acl.entity);
         }
 
         acls.add(acl);
