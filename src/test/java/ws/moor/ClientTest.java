@@ -135,7 +135,7 @@ public class ClientTest {
   }
 
   @Test
-  public void writesDataInTheOriginalFormat() throws Exception {
+  public void writesDataInTheDocumentedFormat() throws Exception {
     page.navigate(DevServer.BASE_URL + "/");
     button(unlock("my passphrase"), "Create new key...").click();
     Locator newKey = dialog("New Key");
@@ -160,11 +160,13 @@ public class ClientTest {
 
     // read back what the server stored, with an implementation independent of the client
     JsonObject key = api("GET", "/keys", null).getAsJsonArray().get(0).getAsJsonObject();
-    byte[] rawSecret = EncryptionFormat.unwrapSecret("my passphrase", key.getAsJsonArray("encryptions").get(0).getAsJsonObject());
+    JsonObject encryption = key.getAsJsonArray("encryptions").get(0).getAsJsonObject();
+    assertThat(encryption.get("algorithm").getAsString()).isEqualTo("PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256");
+    byte[] rawSecret = EncryptionFormat.unwrapSecret("my passphrase", encryption);
     assertThat(rawSecret).isNotNull();
     assertThat(EncryptionFormat.decrypt(rawSecret, key.getAsJsonObject("name"))).isEqualTo("Vault");
     assertThat(EncryptionFormat.decrypt(rawSecret, key.getAsJsonObject("description"))).isEqualTo("für alles");
-    assertThat(EncryptionFormat.unwrapSecret("wrong", key.getAsJsonArray("encryptions").get(0).getAsJsonObject())).isNull();
+    assertThat(EncryptionFormat.unwrapSecret("wrong", encryption)).isNull();
 
     String keyId = key.get("id").getAsString();
     JsonObject storedSecret = api("GET", "/keys/" + keyId + "/secrets", null).getAsJsonArray().get(0).getAsJsonObject();
@@ -226,12 +228,12 @@ public class ClientTest {
     Locator editKey = dialog("Edit Key");
     editKey.locator("input[name=passphrase]").fill("other passphrase");
     button(editKey, "try").click();
-    assertThat(editKey.locator("li.encryption-used")).hasText("Encryption #0");
+    assertThat(editKey.locator("li.encryption-used")).hasText("Encryption #0 (legacy)");
     editKey.locator("input[name=new-passphrase]").fill("new passphrase");
     button(editKey, "add").click();
     assertThat(editKey.locator("li")).hasCount(2);
     // the key stays unlocked after saving
-    assertThat(editKey.locator("li.encryption-used")).hasText("Encryption #0");
+    assertThat(editKey.locator("li.encryption-used")).hasText("Encryption #0 (legacy)");
     assertThat(button(editKey.locator("li").nth(1), "delete")).isVisible();
     button(editKey, "done").click();
 
@@ -251,6 +253,59 @@ public class ClientTest {
     assertThat(keys.locator("li").filter(new Locator.FilterOptions().setHasText("Work"))).hasCount(0);
     openKey("new passphrase", "Work");
     assertThat(page.locator("div.secretName")).hasText(new String[] {"VPN"});
+  }
+
+  /** Re-wrapping with the same passphrase, then deleting the legacy encryption, as the user would. */
+  @Test
+  public void upgradesLegacyEncryptionManually() throws Exception {
+    importLegacyData();
+
+    page.navigate(DevServer.BASE_URL + "/");
+    button(keyItem(unlock("correct horse battery staple"), "Family"), "edit").click();
+    Locator editKey = dialog("Edit Key");
+    editKey.locator("input[name=passphrase]").fill("correct horse battery staple");
+    button(editKey, "try").click();
+    assertThat(editKey.locator("li span")).hasText(new String[] {"Encryption #0 (legacy)", "Encryption #1 (legacy)"});
+    assertThat(editKey.locator("li.encryption-used")).hasText("Encryption #0 (legacy)");
+
+    // the same passphrase again: added with the current algorithm, which is then the one used
+    editKey.locator("input[name=new-passphrase]").fill("correct horse battery staple");
+    button(editKey, "add").click();
+    assertThat(editKey.locator("li span"))
+        .hasText(new String[] {"Encryption #0 (legacy)", "Encryption #1 (legacy)", "Encryption #2"});
+    assertThat(editKey.locator("li.encryption-used")).hasText("Encryption #2");
+
+    // once more: nothing to upgrade anymore
+    editKey.locator("input[name=new-passphrase]").fill("correct horse battery staple");
+    button(editKey, "add").click();
+    assertThat(editKey.locator("li span"))
+        .hasText(new String[] {"Encryption #0 (legacy)", "Encryption #1 (legacy)", "Encryption #2"});
+
+    button(editKey.locator("li").nth(0), "delete").click();
+    assertThat(editKey.locator("li span")).hasText(new String[] {"Encryption #0 (legacy)", "Encryption #1"});
+    assertThat(editKey.locator("li.encryption-used")).hasText("Encryption #1");
+    button(editKey, "done").click();
+
+    // both passphrases still work, the upgraded one through the current algorithm only
+    JsonObject family = null;
+    for (JsonElement key : api("GET", "/keys", null).getAsJsonArray()) {
+      if (key.getAsJsonObject().getAsJsonArray("encryptions").size() == 2) {
+        family = key.getAsJsonObject();
+      }
+    }
+    JsonArray encryptions = family.getAsJsonArray("encryptions");
+    assertThat(encryptions.get(0).getAsJsonObject().get("algorithm").getAsString())
+        .isEqualTo("PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256");
+    assertThat(encryptions.get(1).getAsJsonObject().get("algorithm").getAsString())
+        .isEqualTo("PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256");
+    assertThat(EncryptionFormat.unwrapSecret("correct horse battery staple", encryptions.get(0).getAsJsonObject())).isNull();
+    byte[] rawSecret = EncryptionFormat.unwrapSecret("correct horse battery staple", encryptions.get(1).getAsJsonObject());
+    assertThat(EncryptionFormat.decrypt(rawSecret, family.getAsJsonObject("name"))).isEqualTo("Family");
+
+    openKey("correct horse battery staple", "Family");
+    assertThat(page.locator("div.secretName")).hasText(new String[] {"bank", "Mail"});
+    openKey("zweites Passwort ä", "Family");
+    assertThat(page.locator("div.secretName")).hasText(new String[] {"bank", "Mail"});
   }
 
   @Test

@@ -15,6 +15,7 @@
 */
 
 import * as api from './api.js';
+import {isLegacyEncryption} from './crypto.js';
 import {Dialog, button, h} from './dom.js';
 import {Key} from './key.js';
 
@@ -137,9 +138,10 @@ export function editKey(key) {
     };
 
     const render = () => {
-      encryptionList.replaceChildren(...key.encryptions.map((_, i) => {
+      encryptionList.replaceChildren(...key.encryptions.map((encryption, i) => {
         const used = key.usedEncryption === i;
-        const item = h('li', {class: used ? 'encryption-used' : 'encryption-locked'}, h('span', {}, 'Encryption #' + i));
+        const label = 'Encryption #' + i + (isLegacyEncryption(encryption) ? ' (legacy)' : '');
+        const item = h('li', {class: used ? 'encryption-used' : 'encryption-locked'}, h('span', {}, label));
         if (key.isUnlocked() && !used) {
           item.append(' ', button('delete', () => save(() => key.removeEncryption(i))));
         }

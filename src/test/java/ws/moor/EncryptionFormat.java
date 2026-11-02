@@ -23,12 +23,23 @@ final class EncryptionFormat {
 
   /** @return a key's raw secret, or null if the passphrase does not match */
   static byte[] unwrapSecret(String passphrase, JsonObject encryption) throws GeneralSecurityException {
-    if (!encryption.get("algorithm").getAsString().equals("PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256")) {
-      throw new IllegalArgumentException(encryption.toString());
+    String algorithm;
+    int iterations;
+    switch (encryption.get("algorithm").getAsString()) {
+      case "PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256":
+        algorithm = "PBKDF2WithHmacSHA512";
+        iterations = 210000;
+        break;
+      case "PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256":
+        algorithm = "PBKDF2WithHmacSHA1";
+        iterations = 1000;
+        break;
+      default:
+        throw new IllegalArgumentException(encryption.toString());
     }
     // the JDK's PBKDF2 encodes the passphrase as UTF-8, like the client
-    byte[] key = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1")
-        .generateSecret(new PBEKeySpec(passphrase.toCharArray(), bytes(encryption, "iv"), 1000, 256))
+    byte[] key = SecretKeyFactory.getInstance(algorithm)
+        .generateSecret(new PBEKeySpec(passphrase.toCharArray(), bytes(encryption, "iv"), iterations, 256))
         .getEncoded();
     try {
       return decryptBytes(key, encryption);
