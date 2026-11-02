@@ -100,6 +100,14 @@ class AuthCookieFactory {
     return string;
   }
 
+  public String createClearCookieString() {
+    String string = String.format("%s=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax", COOKIE_NAME);
+    if (secureOnly) {
+      string += "; Secure";
+    }
+    return string;
+  }
+
   private byte[] sign(UserId userId, Instant creationTime) {
     try {
       Mac mac = Mac.getInstance("HmacSHA256");

@@ -64,6 +64,18 @@ public class AuthCookieFactoryTest {
   }
 
   @Test
+  public void testCreateClearCookieStringInsecure() {
+    String clearCookie = factoryInsecure.createClearCookieString();
+    assertThat(clearCookie).isEqualTo("auth=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
+  }
+
+  @Test
+  public void testCreateClearCookieStringSecure() {
+    String clearCookie = factorySecure.createClearCookieString();
+    assertThat(clearCookie).isEqualTo("auth=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure");
+  }
+
+  @Test
   public void testExpiredCookieRejected() {
     UserId user = UserId.fromString("user-1");
     String cookieHeader = factoryInsecure.createCookieString(user);

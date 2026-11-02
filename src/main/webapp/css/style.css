@@ -158,6 +158,9 @@ dialog::backdrop {
 }
 
 .searchBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 80%;
   margin: 8px auto 0px auto;
   /* aligned with the edges of the secrets below */
@@ -166,7 +169,7 @@ dialog::backdrop {
 }
 
 .search {
-  width: 100%;
+  flex: 1;
   box-sizing: border-box;
   font: inherit;
   padding: 4px;

@@ -31,6 +31,7 @@ public class AuthModule extends AbstractModule {
       @Override protected void configureServlets() {
         serve(OAuthCallbackServlet.PATH).with(OAuthCallbackServlet.class);
         serve(CliLoginServlet.PATH).with(CliLoginServlet.class);
+        serve(LogoutServlet.PATH).with(LogoutServlet.class);
       }
     });
   }
