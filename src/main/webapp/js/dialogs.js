@@ -129,12 +129,18 @@ export function editKey(key) {
     const encryptionList = h('ul');
     const newEncryptionArea = h('div');
 
-    /** @param {() => Promise<void> | void} change */
-    const save = async change => {
-      await change();
-      key = new Key(await api.updateKey(key.id, key.toJson()));
-      await key.unlock(passphrase);
-      render();
+    let saving = Promise.resolve();
+    /** @param {() => Promise<boolean | void> | boolean | void} change */
+    const save = change => {
+      saving = saving.catch(() => {}).then(async () => {
+        const changed = await change();
+        if (changed !== false) {
+          key = new Key(await api.updateKey(key.id, key.toJson()));
+          await key.unlock(passphrase);
+        }
+        render();
+      });
+      return saving;
     };
 
     const render = () => {
@@ -172,7 +178,8 @@ export function editKey(key) {
         }, 'dialog-button'),
         encryptionList,
         newEncryptionArea,
-        h('div', {}, button('done', () => {
+        h('div', {}, button('done', async () => {
+          await saving;
           dialog.close();
           resolve();
         })));

@@ -92,14 +92,16 @@ export class Key {
    * a passphrase that only unlocks a legacy encryption upgrades it: the legacy one can then be deleted.
    *
    * @param {string} passphrase
+   * @returns {Promise<boolean>} whether a new encryption was added
    */
   async addPassphrase(passphrase) {
     for (const encryption of this.encryptions) {
       if (!isLegacyEncryption(encryption) && await unwrapSecret(passphrase, encryption)) {
-        return;
+        return false;
       }
     }
     this.encryptions.push(await wrapSecret(passphrase, this.unlockedSecret()));
+    return true;
   }
 
   /** @param {number} index */
