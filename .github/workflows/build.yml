@@ -20,3 +20,11 @@ jobs:
       - name: type check client
         run: npx --yes -p typescript@7.0.2 tsc -p tsconfig.json
       - run: mvn -B verify
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: test python client
+        working-directory: client
+        run: |
+          pip install cryptography
+          python -m unittest m2tests
