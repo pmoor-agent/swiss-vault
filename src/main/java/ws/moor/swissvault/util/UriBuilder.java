@@ -29,7 +29,7 @@ public class UriBuilder {
   private final String hostname;
 
   @Inject
-  UriBuilder(@Config("scheme") String scheme, @Config("hostname") String hostname) {
+  public UriBuilder(@Config("scheme") String scheme, @Config("hostname") String hostname) {
     this.scheme = scheme;
     this.hostname = hostname;
   }

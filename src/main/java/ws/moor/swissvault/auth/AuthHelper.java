@@ -67,18 +67,18 @@ public class AuthHelper {
     this.clientId = clientId;
   }
 
-  public URI createRedirectUri() {
-    return createRedirectUri(OAuthState.HOME);
+  public URI createRedirectUri(OAuthState state, String nonce) {
+    return createRedirectUri(state.name() + ":" + nonce);
   }
 
-  public URI createRedirectUri(OAuthState state) {
+  public URI createRedirectUri(String state) {
     Map<String, String> parameters = Maps.newHashMap();
     parameters.put("response_type", "code");
     parameters.put("client_id", clientId);
     parameters.put("redirect_uri", uriBuilder.forPath(OAuthCallbackServlet.PATH).toString());
     parameters.put("scope", Joiner.on(" ").join(SCOPES));
     parameters.put("access_type", "online");
-    parameters.put("state", state.name());
+    parameters.put("state", state);
 
     try {
       return new URI("https", "accounts.google.com", "/o/oauth2/auth", buildKeyValueString(parameters, false), null);

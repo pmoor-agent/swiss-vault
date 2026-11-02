@@ -31,8 +31,10 @@ public enum OAuthState {
 
   public static OAuthState fromString(String value) {
     if (value != null) {
+      int colon = value.indexOf(':');
+      String name = colon >= 0 ? value.substring(0, colon) : value;
       try {
-        return OAuthState.valueOf(value);
+        return OAuthState.valueOf(name);
       } catch (IllegalArgumentException ignored) {
       }
     }
