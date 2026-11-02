@@ -164,19 +164,26 @@ public class ClientTest {
     assertThat(encryption.get("algorithm").getAsString()).isEqualTo("PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256");
     byte[] rawSecret = EncryptionFormat.unwrapSecret("my passphrase", encryption);
     assertThat(rawSecret).isNotNull();
+    assertThat(key.getAsJsonObject("name").get("algorithm").getAsString()).isEqualTo("AES_256_GCM");
+    assertThat(key.getAsJsonObject("description").get("algorithm").getAsString()).isEqualTo("AES_256_GCM");
     assertThat(EncryptionFormat.decrypt(rawSecret, key.getAsJsonObject("name"))).isEqualTo("Vault");
     assertThat(EncryptionFormat.decrypt(rawSecret, key.getAsJsonObject("description"))).isEqualTo("für alles");
     assertThat(EncryptionFormat.unwrapSecret("wrong", encryption)).isNull();
 
     String keyId = key.get("id").getAsString();
     JsonObject storedSecret = api("GET", "/keys/" + keyId + "/secrets", null).getAsJsonArray().get(0).getAsJsonObject();
+    assertThat(storedSecret.getAsJsonObject("name").get("algorithm").getAsString()).isEqualTo("AES_256_GCM");
+    assertThat(storedSecret.getAsJsonObject("description").get("algorithm").getAsString()).isEqualTo("AES_256_GCM");
     assertThat(EncryptionFormat.decrypt(rawSecret, storedSecret.getAsJsonObject("name"))).isEqualTo("Bank");
     assertThat(EncryptionFormat.decrypt(rawSecret, storedSecret.getAsJsonObject("description"))).isEqualTo("online banking");
     Map<String, String> storedProperties = new HashMap<>();
     for (JsonElement property : api("GET", "/keys/" + keyId + "/secrets/" + storedSecret.get("id").getAsString() + "/properties", null).getAsJsonArray()) {
+      JsonObject propObj = property.getAsJsonObject();
+      assertThat(propObj.getAsJsonObject("name").get("algorithm").getAsString()).isEqualTo("AES_256_GCM");
+      assertThat(propObj.getAsJsonObject("value").get("algorithm").getAsString()).isEqualTo("AES_256_GCM");
       storedProperties.put(
-          EncryptionFormat.decrypt(rawSecret, property.getAsJsonObject().getAsJsonObject("name")),
-          EncryptionFormat.decrypt(rawSecret, property.getAsJsonObject().getAsJsonObject("value")));
+          EncryptionFormat.decrypt(rawSecret, propObj.getAsJsonObject("name")),
+          EncryptionFormat.decrypt(rawSecret, propObj.getAsJsonObject("value")));
     }
     assertThat(storedProperties).isEqualTo(Map.of("login", "alice", "password", "pä$$wörd 🔑"));
 

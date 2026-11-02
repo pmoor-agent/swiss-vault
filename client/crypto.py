@@ -25,7 +25,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 __author__ = 'pmoor'
 
-VALUE_ALGORITHM = "AES_256_CBC_HMAC_SHA256"
+VALUE_ALGORITHM = "AES_256_GCM"
+LEGACY_VALUE_ALGORITHM = "AES_256_CBC_HMAC_SHA256"
 # written for new passphrases
 PASSPHRASE_ALGORITHM = "PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256"
 # written until 2026, still read
@@ -63,19 +64,17 @@ def createEncryption(secret_key: bytes, value: Union[str, bytes]) -> Dict[str, A
   else:
     cleartext = value
 
-  iv = secrets.token_bytes(16)
-  cipher = Cipher(algorithms.AES(secret_key), modes.CBC(iv))
+  iv = secrets.token_bytes(12)
+  cipher = Cipher(algorithms.AES(secret_key), modes.GCM(iv))
   encryptor = cipher.encryptor()
-  ciphertext = encryptor.update(_pad(cleartext)) + encryptor.finalize()
-
-  signature = hmac.new(secret_key, iv + cleartext, hashlib.sha256).digest()
+  ciphertext = encryptor.update(cleartext) + encryptor.finalize()
 
   return {
     "version": 0,
     "algorithm": VALUE_ALGORITHM,
     "iv": base64.b64encode(iv).decode("ascii"),
     "ciphertext": base64.b64encode(ciphertext).decode("ascii"),
-    "signature": base64.b64encode(signature).decode("ascii"),
+    "signature": base64.b64encode(encryptor.tag).decode("ascii"),
   }
 
 
@@ -126,22 +125,38 @@ def extractSecretKey(key_resource: Dict[str, Any], passphrase: str) -> Optional[
 
 
 def decryptSecret(encryption: Dict[str, Any], secret_key: bytes) -> str:
-  if encryption.get("algorithm") != VALUE_ALGORITHM:
-    raise ValueError(f"unsupported algorithm: {encryption.get('algorithm')}")
+  algorithm = encryption.get("algorithm")
+  if algorithm == VALUE_ALGORITHM:
+    iv = base64.b64decode(encryption["iv"])
+    ciphertext = base64.b64decode(encryption["ciphertext"])
+    signature = base64.b64decode(encryption["signature"])
 
-  iv = base64.b64decode(encryption["iv"])
-  ciphertext = base64.b64decode(encryption["ciphertext"])
-  signature = base64.b64decode(encryption["signature"])
+    try:
+      cipher = Cipher(algorithms.AES(secret_key), modes.GCM(iv, signature))
+      decryptor = cipher.decryptor()
+      cleartext = decryptor.update(ciphertext) + decryptor.finalize()
+    except Exception as e:
+      raise ValueError("decryption failed; invalid key or corrupted data") from e
 
-  cipher = Cipher(algorithms.AES(secret_key), modes.CBC(iv))
-  decryptor = cipher.decryptor()
-  try:
-    cleartext = _unpad(decryptor.update(ciphertext) + decryptor.finalize())
-  except Exception as e:
-    raise ValueError("decryption failed; invalid key or corrupted data") from e
+    return cleartext.decode('utf-8')
 
-  expected_signature = hmac.new(secret_key, iv + cleartext, hashlib.sha256).digest()
-  if not hmac.compare_digest(expected_signature, signature):
-    raise ValueError("invalid signature")
+  elif algorithm == LEGACY_VALUE_ALGORITHM:
+    iv = base64.b64decode(encryption["iv"])
+    ciphertext = base64.b64decode(encryption["ciphertext"])
+    signature = base64.b64decode(encryption["signature"])
 
-  return cleartext.decode('utf-8')
+    cipher = Cipher(algorithms.AES(secret_key), modes.CBC(iv))
+    decryptor = cipher.decryptor()
+    try:
+      cleartext = _unpad(decryptor.update(ciphertext) + decryptor.finalize())
+    except Exception as e:
+      raise ValueError("decryption failed; invalid key or corrupted data") from e
+
+    expected_signature = hmac.new(secret_key, iv + cleartext, hashlib.sha256).digest()
+    if not hmac.compare_digest(expected_signature, signature):
+      raise ValueError("invalid signature")
+
+    return cleartext.decode('utf-8')
+
+  else:
+    raise ValueError(f"unsupported algorithm: {algorithm}")

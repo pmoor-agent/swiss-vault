@@ -45,15 +45,24 @@ public class EncryptedValueTest {
   @Test
   public void testEncryptionAlgorithmProperties() {
     for (EncryptionAlgorithm algo : EncryptionAlgorithm.values()) {
-      assertThat(algo.getIvLengthBytes()).isEqualTo(16);
-      assertThat(algo.getSignatureLengthBytes()).isEqualTo(32);
+      if (algo == EncryptionAlgorithm.AES_256_GCM) {
+        assertThat(algo.getIvLengthBytes()).isEqualTo(12);
+        assertThat(algo.getSignatureLengthBytes()).isEqualTo(16);
+        assertThat(algo.getMinCiphertextLengthBytes()).isEqualTo(0);
+      } else {
+        assertThat(algo.getIvLengthBytes()).isEqualTo(16);
+        assertThat(algo.getSignatureLengthBytes()).isEqualTo(32);
+        assertThat(algo.getMinCiphertextLengthBytes()).isEqualTo(1);
+      }
     }
   }
 
   @Test
   public void testConstructor_allAlgorithmsValid() {
     for (EncryptionAlgorithm algo : EncryptionAlgorithm.values()) {
-      EncryptedValue ev = new EncryptedValue(algo, VALID_IV, VALID_CIPHERTEXT, VALID_SIGNATURE);
+      byte[] iv = new byte[algo.getIvLengthBytes()];
+      byte[] signature = new byte[algo.getSignatureLengthBytes()];
+      EncryptedValue ev = new EncryptedValue(algo, iv, VALID_CIPHERTEXT, signature);
       assertThat(ev.getAlgorithm()).isEqualTo(algo);
     }
   }
@@ -328,6 +337,104 @@ public class EncryptedValueTest {
     assertThat(restoredList).hasSize(2);
     assertThat(restoredList.get(0).getCiphertext()).isEqualTo("val1".getBytes(StandardCharsets.UTF_8));
     assertThat(restoredList.get(1).getCiphertext()).isEqualTo("val2".getBytes(StandardCharsets.UTF_8));
+  }
+
+  @Test
+  public void testAes256Gcm_nonEmptyCiphertext_roundTrips() {
+    byte[] iv = new byte[12];
+    Arrays.fill(iv, (byte) 0x33);
+    byte[] signature = new byte[16];
+    Arrays.fill(signature, (byte) 0x44);
+    byte[] ciphertext = "gcm ciphertext".getBytes(StandardCharsets.UTF_8);
+
+    EncryptedValue original = new EncryptedValue(EncryptionAlgorithm.AES_256_GCM, iv, ciphertext, signature);
+    assertThat(original.getAlgorithm()).isEqualTo(EncryptionAlgorithm.AES_256_GCM);
+    assertThat(original.getIv()).isEqualTo(iv);
+    assertThat(original.getCiphertext()).isEqualTo(ciphertext);
+    assertThat(original.getSignature()).isEqualTo(signature);
+
+    // Json round-trip
+    JsonObject json = original.toJsonObject();
+    assertThat(json.get("algorithm").getAsString()).isEqualTo("AES_256_GCM");
+    EncryptedValue fromJson = EncryptedValue.fromJsonObject(json);
+    assertThat(fromJson.getAlgorithm()).isEqualTo(EncryptionAlgorithm.AES_256_GCM);
+    assertThat(fromJson.getIv()).isEqualTo(iv);
+    assertThat(fromJson.getCiphertext()).isEqualTo(ciphertext);
+    assertThat(fromJson.getSignature()).isEqualTo(signature);
+
+    // Text round-trip
+    Text text = original.toText();
+    EncryptedValue fromTxt = EncryptedValue.fromText(text);
+    assertThat(fromTxt.getAlgorithm()).isEqualTo(EncryptionAlgorithm.AES_256_GCM);
+    assertThat(fromTxt.getIv()).isEqualTo(iv);
+    assertThat(fromTxt.getCiphertext()).isEqualTo(ciphertext);
+    assertThat(fromTxt.getSignature()).isEqualTo(signature);
+  }
+
+  @Test
+  public void testAes256Gcm_emptyCiphertext_roundTrips() {
+    byte[] iv = new byte[12];
+    Arrays.fill(iv, (byte) 0x55);
+    byte[] signature = new byte[16];
+    Arrays.fill(signature, (byte) 0x66);
+    byte[] ciphertext = new byte[0];
+
+    EncryptedValue original = new EncryptedValue(EncryptionAlgorithm.AES_256_GCM, iv, ciphertext, signature);
+    assertThat(original.getAlgorithm()).isEqualTo(EncryptionAlgorithm.AES_256_GCM);
+    assertThat(original.getIv()).isEqualTo(iv);
+    assertThat(original.getCiphertext()).isEqualTo(new byte[0]);
+    assertThat(original.getSignature()).isEqualTo(signature);
+
+    // Json round-trip
+    JsonObject json = original.toJsonObject();
+    assertThat(json.get("algorithm").getAsString()).isEqualTo("AES_256_GCM");
+    assertThat(json.get("ciphertext").getAsString()).isEmpty();
+    EncryptedValue fromJson = EncryptedValue.fromJsonObject(json);
+    assertThat(fromJson.getAlgorithm()).isEqualTo(EncryptionAlgorithm.AES_256_GCM);
+    assertThat(fromJson.getIv()).isEqualTo(iv);
+    assertThat(fromJson.getCiphertext()).isEqualTo(new byte[0]);
+    assertThat(fromJson.getSignature()).isEqualTo(signature);
+
+    // Text round-trip
+    Text text = original.toText();
+    assertThat(text.getValue()).contains("::");
+    EncryptedValue fromTxt = EncryptedValue.fromText(text);
+    assertThat(fromTxt.getAlgorithm()).isEqualTo(EncryptionAlgorithm.AES_256_GCM);
+    assertThat(fromTxt.getIv()).isEqualTo(iv);
+    assertThat(fromTxt.getCiphertext()).isEqualTo(new byte[0]);
+    assertThat(fromTxt.getSignature()).isEqualTo(signature);
+  }
+
+  @Test
+  public void testAes256Gcm_invalidLengths() {
+    byte[] validIv = new byte[12];
+    byte[] validSig = new byte[16];
+    byte[] validCipher = new byte[0];
+
+    // Invalid IV lengths
+    assertThrows(IllegalArgumentException.class, () ->
+        new EncryptedValue(EncryptionAlgorithm.AES_256_GCM, new byte[11], validCipher, validSig));
+    assertThrows(IllegalArgumentException.class, () ->
+        new EncryptedValue(EncryptionAlgorithm.AES_256_GCM, new byte[13], validCipher, validSig));
+    assertThrows(IllegalArgumentException.class, () ->
+        new EncryptedValue(EncryptionAlgorithm.AES_256_GCM, new byte[16], validCipher, validSig));
+
+    // Invalid signature lengths
+    assertThrows(IllegalArgumentException.class, () ->
+        new EncryptedValue(EncryptionAlgorithm.AES_256_GCM, validIv, validCipher, new byte[15]));
+    assertThrows(IllegalArgumentException.class, () ->
+        new EncryptedValue(EncryptionAlgorithm.AES_256_GCM, validIv, validCipher, new byte[17]));
+    assertThrows(IllegalArgumentException.class, () ->
+        new EncryptedValue(EncryptionAlgorithm.AES_256_GCM, validIv, validCipher, new byte[32]));
+
+    // Null ciphertext
+    assertThrows(IllegalArgumentException.class, () ->
+        new EncryptedValue(EncryptionAlgorithm.AES_256_GCM, validIv, null, validSig));
+
+    // Ciphertext too large
+    byte[] tooLarge = new byte[EncryptedValue.MAX_CIPHERTEXT_BYTES + 1];
+    assertThrows(IllegalArgumentException.class, () ->
+        new EncryptedValue(EncryptionAlgorithm.AES_256_GCM, validIv, tooLarge, validSig));
   }
 
   private static JsonObject createValidJsonObject() {

@@ -17,6 +17,7 @@
 import base64
 import http.client
 import os
+import secrets
 import sys
 import unittest
 import urllib.parse
@@ -58,6 +59,56 @@ class ClientDevTest(unittest.TestCase):
 
     client.clear_cached_cookie(test_server)
     self.assertIsNone(client.load_cached_cookie(test_server))
+
+  def test_value_encryption_aes_gcm_and_legacy_cbc(self):
+    secret_key = crypto.newRandomSecretKey()
+
+    # 1. createEncryption writes AES_256_GCM
+    enc = crypto.createEncryption(secret_key, "Secret value with unicode 🔑")
+    self.assertEqual("AES_256_GCM", enc["algorithm"])
+    self.assertEqual(0, enc["version"])
+    self.assertEqual(12, len(base64.b64decode(enc["iv"])))
+    self.assertEqual(16, len(base64.b64decode(enc["signature"])))
+    self.assertEqual("Secret value with unicode 🔑", crypto.decryptSecret(enc, secret_key))
+
+    # 2. createEncryption with empty string ""
+    enc_empty = crypto.createEncryption(secret_key, "")
+    self.assertEqual("AES_256_GCM", enc_empty["algorithm"])
+    self.assertEqual("", enc_empty["ciphertext"])
+    self.assertEqual(0, len(base64.b64decode(enc_empty["ciphertext"])))
+    self.assertEqual(16, len(base64.b64decode(enc_empty["signature"])))
+    self.assertEqual("", crypto.decryptSecret(enc_empty, secret_key))
+
+    # 3. Decrypt legacy AES_256_CBC_HMAC_SHA256 value
+    import hashlib
+    import hmac
+    from cryptography.hazmat.primitives import padding
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    iv = secrets.token_bytes(16)
+    cleartext = "Legacy secret data".encode("utf-8")
+    padder = padding.PKCS7(128).padder()
+    padded = padder.update(cleartext) + padder.finalize()
+    cipher = Cipher(algorithms.AES(secret_key), modes.CBC(iv))
+    enc_legacy = cipher.encryptor()
+    ciphertext = enc_legacy.update(padded) + enc_legacy.finalize()
+    signature = hmac.new(secret_key, iv + cleartext, hashlib.sha256).digest()
+    legacy_encryption = {
+      "version": 0,
+      "algorithm": "AES_256_CBC_HMAC_SHA256",
+      "iv": base64.b64encode(iv).decode("ascii"),
+      "ciphertext": base64.b64encode(ciphertext).decode("ascii"),
+      "signature": base64.b64encode(signature).decode("ascii"),
+    }
+    self.assertEqual("Legacy secret data", crypto.decryptSecret(legacy_encryption, secret_key))
+
+    # 4. Error conditions
+    bad_enc = dict(enc, signature=base64.b64encode(b"0" * 16).decode("ascii"))
+    with self.assertRaises(ValueError):
+      crypto.decryptSecret(bad_enc, secret_key)
+
+    unknown_algo = dict(enc, algorithm="UNKNOWN_ALGO")
+    with self.assertRaises(ValueError):
+      crypto.decryptSecret(unknown_algo, secret_key)
 
   def test_vault_lifecycle(self):
     if not self.server_available:

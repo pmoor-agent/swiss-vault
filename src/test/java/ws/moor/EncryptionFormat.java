@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -49,10 +50,23 @@ final class EncryptionFormat {
   }
 
   static String decrypt(byte[] rawSecret, JsonObject value) throws GeneralSecurityException {
-    if (!value.get("algorithm").getAsString().equals("AES_256_CBC_HMAC_SHA256")) {
+    String algorithm = value.get("algorithm").getAsString();
+    if (algorithm.equals("AES_256_GCM")) {
+      byte[] iv = bytes(value, "iv");
+      byte[] ciphertext = bytes(value, "ciphertext");
+      byte[] signature = bytes(value, "signature");
+      byte[] combined = new byte[ciphertext.length + signature.length];
+      System.arraycopy(ciphertext, 0, combined, 0, ciphertext.length);
+      System.arraycopy(signature, 0, combined, ciphertext.length, signature.length);
+
+      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(rawSecret, "AES"), new GCMParameterSpec(128, iv));
+      return new String(cipher.doFinal(combined), StandardCharsets.UTF_8);
+    } else if (algorithm.equals("AES_256_CBC_HMAC_SHA256")) {
+      return new String(decryptBytes(rawSecret, value), StandardCharsets.UTF_8);
+    } else {
       throw new IllegalArgumentException(value.toString());
     }
-    return new String(decryptBytes(rawSecret, value), StandardCharsets.UTF_8);
   }
 
   private static byte[] decryptBytes(byte[] key, JsonObject value) throws GeneralSecurityException {
