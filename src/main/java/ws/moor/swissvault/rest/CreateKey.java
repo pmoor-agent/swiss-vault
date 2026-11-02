@@ -16,7 +16,6 @@
 package ws.moor.swissvault.rest;
 
 import com.google.appengine.api.datastore.Transaction;
-import com.google.common.base.Preconditions;
 import com.google.gson.JsonObject;
 import com.google.inject.Inject;
 import ws.moor.rest.RestAction;
@@ -30,6 +29,8 @@ import ws.moor.swissvault.persistence.model.DbKey;
 import ws.moor.swissvault.rest.filters.AccessType;
 import ws.moor.swissvault.rest.filters.AuthorizationRequired;
 import ws.moor.swissvault.util.Obfuscator;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 @AuthorizationRequired(type = AccessType.USER_ID_PRESENT)
 @Post(path = "/keys")
@@ -51,7 +52,7 @@ public class CreateKey implements RestAction {
 
   @Execute
   public JsonObject create(@RequestBody JsonObject entityData) {
-    Preconditions.checkNotNull(entityData);
+    checkNotNull(entityData);
     DbKey key = keyRepository.newKey(transaction, currentUserId, entityData);
     transaction.commit();
 

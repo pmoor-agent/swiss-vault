@@ -16,7 +16,6 @@
 package ws.moor.swissvault.auth;
 
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.io.BaseEncoding;
 import com.google.inject.Inject;
@@ -29,6 +28,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 @Singleton
 public class OAuthStateHelper {
@@ -47,11 +48,11 @@ public class OAuthStateHelper {
 
   OAuthStateHelper(boolean secureOnly, SecureRandom secureRandom) {
     this.secureOnly = secureOnly;
-    this.secureRandom = Preconditions.checkNotNull(secureRandom);
+    this.secureRandom = checkNotNull(secureRandom);
   }
 
   public String createStateValue(OAuthState state) {
-    Preconditions.checkNotNull(state);
+    checkNotNull(state);
     byte[] nonceBytes = new byte[NONCE_BYTE_COUNT];
     secureRandom.nextBytes(nonceBytes);
     String nonce = BaseEncoding.base16().lowerCase().encode(nonceBytes);
@@ -59,7 +60,7 @@ public class OAuthStateHelper {
   }
 
   public String createCookieHeader(String stateValue) {
-    Preconditions.checkNotNull(stateValue);
+    checkNotNull(stateValue);
     String header = String.format("%s=%s; Max-Age=%d; Path=/; HttpOnly; SameSite=Lax",
         COOKIE_NAME, stateValue, COOKIE_EXPIRATION.getSeconds());
     if (secureOnly) {

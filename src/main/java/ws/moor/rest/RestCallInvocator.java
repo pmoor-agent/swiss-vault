@@ -16,7 +16,6 @@
 package ws.moor.rest;
 
 import com.google.appengine.api.datastore.EntityNotFoundException;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -37,6 +36,8 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 @RequestScoped
 class RestCallInvocator {
@@ -63,7 +64,7 @@ class RestCallInvocator {
 
   public void invoke() {
     Method method = findAnnotatedMethod(actionClass, Execute.class);
-    Preconditions.checkNotNull(method);
+    checkNotNull(method);
 
     Object result = null;
     Throwable caughtException = null;

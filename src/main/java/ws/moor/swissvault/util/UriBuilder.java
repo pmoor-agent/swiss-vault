@@ -15,12 +15,13 @@
  */
 package ws.moor.swissvault.util;
 
-import com.google.common.base.Preconditions;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import ws.moor.swissvault.config.Config;
 
 import java.net.URI;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 @Singleton
 public class UriBuilder {
@@ -35,7 +36,7 @@ public class UriBuilder {
   }
 
   public URI forPath(String path) {
-    Preconditions.checkArgument(path.startsWith("/"), "invalid path: " + path);
+    checkArgument(path.startsWith("/"), "invalid path: " + path);
     return URI.create(String.format("%s://%s%s", scheme, hostname, path));
   }
 }
