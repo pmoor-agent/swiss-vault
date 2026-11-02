@@ -30,7 +30,6 @@ public class DbKeyAcl {
   public static final Property<List<EncryptedValue>> encryptionsProperty = Property.encryptedValues("encryptions");
 
   public static final Property<Date> validFromProperty = Property.date("valid_from");
-  public static final Property<Date> validToProperty = Property.date("valid_to");
 
   public final Entity entity;
 
