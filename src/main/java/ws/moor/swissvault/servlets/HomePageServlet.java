@@ -17,12 +17,15 @@ package ws.moor.swissvault.servlets;
 
 import com.google.common.base.Optional;
 import com.google.common.io.Resources;
+import com.google.common.net.HttpHeaders;
 import com.google.common.net.MediaType;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
 import ws.moor.swissvault.auth.AuthHelper;
 import ws.moor.swissvault.auth.AuthenticatedUser;
+import ws.moor.swissvault.auth.OAuthState;
+import ws.moor.swissvault.auth.OAuthStateHelper;
 import ws.moor.swissvault.auth.UserId;
 
 import javax.servlet.http.HttpServlet;
@@ -39,12 +42,16 @@ public class HomePageServlet extends HttpServlet {
   private static final URL mainPageResourceUrl = Resources.getResource(HomePageServlet.class, "/templates/main.html");
 
   private final AuthHelper authHelper;
+  private final OAuthStateHelper oAuthStateHelper;
   private final Provider<Optional<UserId>> userIdProvider;
 
   @Inject
-  HomePageServlet(AuthHelper authHelper, @AuthenticatedUser Provider<Optional<UserId>> userIdProvider) {
+  HomePageServlet(AuthHelper authHelper,
+                  OAuthStateHelper oAuthStateHelper,
+                  @AuthenticatedUser Provider<Optional<UserId>> userIdProvider) {
     this.userIdProvider = userIdProvider;
     this.authHelper = authHelper;
+    this.oAuthStateHelper = oAuthStateHelper;
   }
 
   @Override
@@ -54,7 +61,9 @@ public class HomePageServlet extends HttpServlet {
       resp.setCharacterEncoding(UTF_8.name().toLowerCase());
       Resources.copy(mainPageResourceUrl, resp.getOutputStream());
     } else {
-      resp.sendRedirect(authHelper.createRedirectUri().toString());
+      String state = oAuthStateHelper.createStateValue(OAuthState.HOME);
+      resp.addHeader(HttpHeaders.SET_COOKIE, oAuthStateHelper.createCookieHeader(state));
+      resp.sendRedirect(authHelper.createRedirectUri(state).toString());
     }
   }
 }

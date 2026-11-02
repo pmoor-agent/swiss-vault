@@ -16,6 +16,7 @@
 package ws.moor.swissvault.auth;
 
 import com.google.common.base.Optional;
+import com.google.common.net.HttpHeaders;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
@@ -39,16 +40,19 @@ class CliLoginServlet extends HttpServlet {
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'UTC'").withZone(ZoneOffset.UTC);
 
   private final AuthHelper authHelper;
+  private final OAuthStateHelper oAuthStateHelper;
   private final AuthCookieFactory authCookieFactory;
   private final Provider<Optional<UserId>> userIdProvider;
   private final Clock clock;
 
   @Inject
   CliLoginServlet(AuthHelper authHelper,
+                  OAuthStateHelper oAuthStateHelper,
                   AuthCookieFactory authCookieFactory,
                   @AuthenticatedUser Provider<Optional<UserId>> userIdProvider,
                   Clock clock) {
     this.authHelper = authHelper;
+    this.oAuthStateHelper = oAuthStateHelper;
     this.authCookieFactory = authCookieFactory;
     this.userIdProvider = userIdProvider;
     this.clock = clock;
@@ -59,7 +63,9 @@ class CliLoginServlet extends HttpServlet {
     Optional<UserId> userId = userIdProvider.get();
 
     if (!userId.isPresent()) {
-      resp.sendRedirect(authHelper.createRedirectUri(OAuthState.CLI_LOGIN).toString());
+      String state = oAuthStateHelper.createStateValue(OAuthState.CLI_LOGIN);
+      resp.addHeader(HttpHeaders.SET_COOKIE, oAuthStateHelper.createCookieHeader(state));
+      resp.sendRedirect(authHelper.createRedirectUri(state).toString());
       return;
     }
 

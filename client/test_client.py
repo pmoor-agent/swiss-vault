@@ -157,13 +157,38 @@ class ClientDevTest(unittest.TestCase):
     self.assertEqual(302, resp.status)
     loc = resp.getheader("Location")
     self.assertIn("accounts.google.com/o/oauth2/auth", loc)
-    self.assertIn("state=CLI_LOGIN", loc)
+    self.assertIn("state=CLI_LOGIN:", loc)
     self.assertEqual("no-store", resp.getheader("Cache-Control"))
     self.assertEqual("max-age=7776000; includeSubDomains", resp.getheader("Strict-Transport-Security"))
     self.assertEqual("nosniff", resp.getheader("X-Content-Type-Options"))
     csp_redirect = resp.getheader("Content-Security-Policy")
     self.assertIsNotNone(csp_redirect)
     self.assertIn("frame-ancestors 'none'", csp_redirect)
+    set_cookie = resp.getheader("Set-Cookie")
+    self.assertIsNotNone(set_cookie)
+    self.assertIn("oauth_state=CLI_LOGIN:", set_cookie)
+    self.assertIn("Path=/", set_cookie)
+    self.assertIn("SameSite=Lax", set_cookie)
+    resp.read()
+
+    # OAuth callback rejects request with missing cookie
+    conn.request("GET", "/oauth2callback?code=fake_code&state=CLI_LOGIN:1234567890abcdef1234567890abcdef")
+    resp = conn.getresponse()
+    self.assertEqual(400, resp.status)
+    resp.read()
+
+    # OAuth callback rejects request with mismatched cookie
+    conn.request("GET", "/oauth2callback?code=fake_code&state=CLI_LOGIN:1234567890abcdef1234567890abcdef",
+                 headers={"Cookie": "oauth_state=CLI_LOGIN:differentnonce1234567890abcdef"})
+    resp = conn.getresponse()
+    self.assertEqual(400, resp.status)
+    resp.read()
+
+    # OAuth callback rejects legacy static state without nonce
+    conn.request("GET", "/oauth2callback?code=attacker_code&state=HOME",
+                 headers={"Cookie": "oauth_state=HOME"})
+    resp = conn.getresponse()
+    self.assertEqual(400, resp.status)
     resp.read()
 
     # Authenticated GET /cli-login shows HTML with auth token in textarea

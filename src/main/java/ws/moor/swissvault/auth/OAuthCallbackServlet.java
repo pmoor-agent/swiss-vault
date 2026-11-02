@@ -15,6 +15,8 @@
  */
 package ws.moor.swissvault.auth;
 
+import com.google.common.base.Optional;
+import com.google.common.base.Strings;
 import com.google.common.net.HttpHeaders;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -31,25 +33,43 @@ class OAuthCallbackServlet extends HttpServlet {
   public static final String PATH = "/oauth2callback";
 
   private final AuthHelper authHelper;
+  private final OAuthStateHelper oAuthStateHelper;
   private final AuthCookieFactory authCookieFactory;
   private final UriBuilder uriBuilder;
 
   @Inject
-  OAuthCallbackServlet(AuthHelper authHelper, AuthCookieFactory authCookieFactory, UriBuilder uriBuilder) {
+  OAuthCallbackServlet(AuthHelper authHelper,
+                      OAuthStateHelper oAuthStateHelper,
+                      AuthCookieFactory authCookieFactory,
+                      UriBuilder uriBuilder) {
     this.authHelper = authHelper;
+    this.oAuthStateHelper = oAuthStateHelper;
     this.authCookieFactory = authCookieFactory;
     this.uriBuilder = uriBuilder;
   }
 
   @Override
   protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    // Clear/expire the state cookie on callback to prevent replay
+    resp.addHeader(HttpHeaders.SET_COOKIE, oAuthStateHelper.createClearCookieHeader());
+
+    Optional<OAuthState> state = oAuthStateHelper.validateAndExtractState(req);
+    if (!state.isPresent()) {
+      resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing or invalid OAuth state");
+      return;
+    }
+
     String code = req.getParameter("code");
+    if (Strings.isNullOrEmpty(code)) {
+      resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing authorization code");
+      return;
+    }
+
     UserId userId = authHelper.determineUserId(code);
     String cookie = authCookieFactory.createCookieString(userId);
 
     resp.addHeader(HttpHeaders.SET_COOKIE, cookie);
 
-    OAuthState state = OAuthState.fromString(req.getParameter("state"));
-    resp.sendRedirect(uriBuilder.forPath(state.getPath()).toString());
+    resp.sendRedirect(uriBuilder.forPath(state.get().getPath()).toString());
   }
 }

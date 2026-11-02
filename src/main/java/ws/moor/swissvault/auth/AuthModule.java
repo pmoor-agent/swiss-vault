@@ -26,6 +26,7 @@ import javax.servlet.http.HttpServletRequest;
 public class AuthModule extends AbstractModule {
   @Override
   protected void configure() {
+    bind(OAuthStateHelper.class);
     install(new ServletModule() {
       @Override protected void configureServlets() {
         serve(OAuthCallbackServlet.PATH).with(OAuthCallbackServlet.class);
