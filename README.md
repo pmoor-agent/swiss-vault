@@ -49,12 +49,12 @@ Production configuration lives in `src/main/resources/production.properties`,
 which is not checked in. It needs the same keys as `development.properties`.
 
     gcloud auth login
-    ./deploy.sh       # builds, tests and uploads the version from pom.xml (1.4-SNAPSHOT -> 1-4-snapshot), without promoting it
+    ./deploy.sh       # builds, tests and uploads the version from pom.xml (1.5-SNAPSHOT -> 1-5-snapshot), without promoting it
 
-`https://1-4-snapshot-dot-swiss-vault.appspot.com/` should now redirect to the
+`https://1-5-snapshot-dot-swiss-vault.appspot.com/` should now redirect to the
 Google login page. Logging in only works on the configured `hostname`, so to
 really try it out send traffic to it:
 
-    gcloud app services set-traffic default --splits=1-4-snapshot=1 --project=swiss-vault
+    gcloud app services set-traffic default --splits=1-5-snapshot=1 --project=swiss-vault
 
 and to roll back, route traffic to the previous version again (`gcloud app versions list`).
