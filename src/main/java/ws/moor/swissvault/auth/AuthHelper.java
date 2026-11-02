@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.google.inject.Inject;
 import ws.moor.swissvault.config.Config;
@@ -35,6 +36,7 @@ import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -42,6 +44,7 @@ import java.util.logging.Logger;
 public class AuthHelper {
 
   private static final Logger logger = Logger.getLogger(AuthHelper.class.getName());
+  private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(10);
 
   private static final URI PROFILE_SCOPE = URI.create("https://www.googleapis.com/auth/userinfo.profile");
   private static final Set<URI> SCOPES = ImmutableSet.of(PROFILE_SCOPE);
@@ -55,7 +58,7 @@ public class AuthHelper {
   @Inject
   AuthHelper(JsonParser jsonParser, UriBuilder uriBuilder,
              @Config("oauth.client_secret") String clientSecret, @Config("oauth.client_id") String clientId) {
-    this(HttpClient.newHttpClient(), jsonParser, uriBuilder, clientSecret, clientId);
+    this(HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build(), jsonParser, uriBuilder, clientSecret, clientId);
   }
 
   AuthHelper(HttpClient httpClient, JsonParser jsonParser, UriBuilder uriBuilder,
@@ -97,34 +100,55 @@ public class AuthHelper {
 
     HttpRequest tokenRequest = HttpRequest.newBuilder()
         .uri(URI.create("https://accounts.google.com/o/oauth2/token"))
+        .timeout(HTTP_TIMEOUT)
         .header("Content-Type", "application/x-www-form-urlencoded")
         .POST(HttpRequest.BodyPublishers.ofString(buildKeyValueString(parameters, true)))
         .build();
-    HttpResponse<String> tokenResponse;
-    try {
-      tokenResponse = httpClient.send(tokenRequest, HttpResponse.BodyHandlers.ofString());
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IOException("Interrupted while fetching OAuth token", e);
-    }
-    JsonObject object = jsonParser.parse(tokenResponse.body()).getAsJsonObject();
-    String accessToken = object.get("access_token").getAsString();
+    String accessToken = sendAndExtractField(tokenRequest, "token", "access_token");
 
     HttpRequest userinfoRequest = HttpRequest.newBuilder()
         .uri(URI.create("https://www.googleapis.com/oauth2/v1/userinfo"))
+        .timeout(HTTP_TIMEOUT)
         .header("Authorization", String.format("Bearer %s", accessToken))
         .GET()
         .build();
-    HttpResponse<String> userinfoResponse;
+    String id = sendAndExtractField(userinfoRequest, "userinfo", "id");
+
+    return UserId.fromString(id);
+  }
+
+  private String sendAndExtractField(HttpRequest request, String requestType, String fieldName) throws IOException {
+    HttpResponse<String> response;
     try {
-      userinfoResponse = httpClient.send(userinfoRequest, HttpResponse.BodyHandlers.ofString());
+      response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new IOException("Interrupted while fetching userinfo", e);
+      throw new IOException("Interrupted while fetching " + ("token".equals(requestType) ? "OAuth token" : requestType), e);
     }
-    object = jsonParser.parse(userinfoResponse.body()).getAsJsonObject();
+    if (response.statusCode() != 200) {
+      throw new IOException("OAuth " + requestType + " request failed with status " + response.statusCode());
+    }
 
-    return UserId.fromString(object.get("id").getAsString());
+    try {
+      String body = response.body();
+      if (body == null) {
+        throw new IOException("OAuth " + requestType + " response body was null");
+      }
+      JsonObject object = jsonParser.parse(body).getAsJsonObject();
+      if (!object.has(fieldName) || object.get(fieldName).isJsonNull()) {
+        throw new IOException("OAuth " + requestType + " response missing " + fieldName);
+      }
+      if (!object.get(fieldName).isJsonPrimitive()) {
+        throw new IOException("OAuth " + requestType + " response " + fieldName + " is not a primitive");
+      }
+      String value = object.get(fieldName).getAsString();
+      if (value.isEmpty()) {
+        throw new IOException("OAuth " + requestType + " response contains empty " + fieldName);
+      }
+      return value;
+    } catch (JsonParseException | IllegalStateException | UnsupportedOperationException e) {
+      throw new IOException("Failed to parse OAuth " + requestType + " response: " + e.getMessage(), e);
+    }
   }
 
   private String buildKeyValueString(Map<String, String> parameters, final boolean encode) {

@@ -16,7 +16,6 @@
 package ws.moor.swissvault.auth;
 
 import com.google.common.base.Charsets;
-import com.google.common.base.Preconditions;
 import com.google.common.io.BaseEncoding;
 import com.google.inject.Inject;
 import ws.moor.swissvault.config.Config;
@@ -26,15 +25,17 @@ import javax.crypto.spec.SecretKeySpec;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
 import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 
 class AuthCookieFactory {
 
   private static final String COOKIE_NAME = "auth";
   private static final Duration COOKIE_EXPIRATION = Duration.ofMinutes(60);
+  private static final Duration CLOCK_SKEW_TOLERANCE = Duration.ofMinutes(1);
 
   private final boolean secureOnly;
   private final SecretKeySpec hmacKey;
@@ -55,22 +56,30 @@ class AuthCookieFactory {
 
   public UserId extractUserId(HttpServletRequest request) {
     Cookie cookie = findCookie(request);
-    if (cookie == null) {
+    if (cookie == null || cookie.getValue() == null) {
       return null;
     }
 
-    String[] parts = cookie.getValue().split(":");
-    Preconditions.checkArgument(parts.length == 3);
+    String[] parts = cookie.getValue().split(":", -1);
+    if (parts.length != 3 || parts[0].isEmpty()) {
+      return null;
+    }
 
-    UserId userId = UserId.fromString(parts[0]);
-    Instant creationTime = Instant.ofEpochMilli(Long.parseLong(parts[1]));
-    byte[] actualSignature = BaseEncoding.base64().decode(parts[2]);
+    try {
+      UserId userId = UserId.fromString(parts[0]);
+      Instant creationTime = Instant.ofEpochMilli(Long.parseLong(parts[1]));
+      byte[] actualSignature = BaseEncoding.base64().decode(parts[2]);
 
-    byte[] expectedSignature = sign(userId, creationTime);
-    if (Arrays.equals(expectedSignature, actualSignature)) {
-      if (creationTime.plus(COOKIE_EXPIRATION).isAfter(clock.instant())) {
-        return userId;
+      byte[] expectedSignature = sign(userId, creationTime);
+      if (MessageDigest.isEqual(expectedSignature, actualSignature)) {
+        Instant now = clock.instant();
+        if (!creationTime.isAfter(now.plus(CLOCK_SKEW_TOLERANCE))
+            && creationTime.plus(COOKIE_EXPIRATION).isAfter(now)) {
+          return userId;
+        }
       }
+    } catch (IllegalArgumentException | DateTimeException e) {
+      return null;
     }
     return null;
   }
@@ -83,7 +92,8 @@ class AuthCookieFactory {
 
     // Lax, not Strict: after picking an account in Google's account chooser, the redirect from the OAuth
     // callback to "/" is part of a navigation started by Google's page, and would not carry a Strict cookie
-    String string = String.format("%s=%s; Max-Age=%d; HttpOnly; SameSite=Lax", COOKIE_NAME, value, COOKIE_EXPIRATION.getSeconds());
+    String string = String.format("%s=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Lax",
+        COOKIE_NAME, value, COOKIE_EXPIRATION.getSeconds());
     if (secureOnly) {
       string += "; Secure";
     }
@@ -104,7 +114,7 @@ class AuthCookieFactory {
     Cookie[] cookies = request.getCookies();
     if (cookies != null) {
       for (Cookie cookie : cookies) {
-        if (cookie.getName().equals(COOKIE_NAME)) {
+        if (COOKIE_NAME.equals(cookie.getName())) {
           return cookie;
         }
       }
