@@ -6,8 +6,8 @@
 
     <groupId>ws.moor.swissvault</groupId>
     <artifactId>swiss-vault</artifactId>
-    <!-- also the App Engine version deploy.sh uploads, with dots replaced by dashes: 1-4-snapshot -->
-    <version>1.4-SNAPSHOT</version>
+    <!-- also the App Engine version deploy.sh uploads, with dots replaced by dashes: 1-5-snapshot -->
+    <version>1.5-SNAPSHOT</version>
     <packaging>war</packaging>
 
     <name>Swiss Vault</name>
