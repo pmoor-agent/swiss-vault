@@ -17,13 +17,13 @@ package ws.moor.rest;
 
 import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.google.inject.Provider;
-import com.google.inject.ProvisionException;
 import com.google.inject.servlet.RequestScoped;
 import ws.moor.rest.annotations.Execute;
 import ws.moor.rest.annotations.PostFilter;
@@ -34,7 +34,6 @@ import ws.moor.swissvault.domain.PermissionDeniedException;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -107,7 +106,7 @@ class RestCallInvocator {
   }
 
   private void handleException(Throwable t) {
-    Throwable cause = unwrapException(t);
+    Throwable cause = Throwables.getRootCause(t);
     try {
       if (cause instanceof PermissionDeniedException) {
         response.sendError(HttpServletResponse.SC_FORBIDDEN, cause.getMessage());
@@ -117,24 +116,13 @@ class RestCallInvocator {
           || cause instanceof JsonParseException
           || cause instanceof IllegalStateException) {
         response.sendError(HttpServletResponse.SC_BAD_REQUEST, cause.getMessage());
-      } else if (cause instanceof RuntimeException) {
-        throw (RuntimeException) cause;
-      } else if (cause instanceof Error) {
-        throw (Error) cause;
       } else {
+        Throwables.throwIfUnchecked(cause);
         throw new RuntimeException(cause);
       }
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-  }
-
-  private Throwable unwrapException(Throwable t) {
-    while ((t instanceof InvocationTargetException || t instanceof ProvisionException)
-        && t.getCause() != null) {
-      t = t.getCause();
-    }
-    return t;
   }
 
   private void writeResponse(Object result) {
