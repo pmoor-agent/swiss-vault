@@ -104,37 +104,7 @@ public class AuthHelper {
         .header("Content-Type", "application/x-www-form-urlencoded")
         .POST(HttpRequest.BodyPublishers.ofString(buildKeyValueString(parameters, true)))
         .build();
-    HttpResponse<String> tokenResponse;
-    try {
-      tokenResponse = httpClient.send(tokenRequest, HttpResponse.BodyHandlers.ofString());
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IOException("Interrupted while fetching OAuth token", e);
-    }
-    if (tokenResponse.statusCode() != 200) {
-      throw new IOException("OAuth token request failed with status " + tokenResponse.statusCode());
-    }
-
-    String accessToken;
-    try {
-      String body = tokenResponse.body();
-      if (body == null) {
-        throw new IOException("OAuth token response body was null");
-      }
-      JsonObject object = jsonParser.parse(body).getAsJsonObject();
-      if (!object.has("access_token") || object.get("access_token").isJsonNull()) {
-        throw new IOException("OAuth token response missing access_token");
-      }
-      if (!object.get("access_token").isJsonPrimitive()) {
-        throw new IOException("OAuth token response access_token is not a primitive");
-      }
-      accessToken = object.get("access_token").getAsString();
-      if (accessToken.isEmpty()) {
-        throw new IOException("OAuth token response contains empty access_token");
-      }
-    } catch (JsonParseException | IllegalStateException | UnsupportedOperationException e) {
-      throw new IOException("Failed to parse OAuth token response: " + e.getMessage(), e);
-    }
+    String accessToken = sendAndExtractField(tokenRequest, "token", "access_token");
 
     HttpRequest userinfoRequest = HttpRequest.newBuilder()
         .uri(URI.create("https://www.googleapis.com/oauth2/v1/userinfo"))
@@ -142,39 +112,43 @@ public class AuthHelper {
         .header("Authorization", String.format("Bearer %s", accessToken))
         .GET()
         .build();
-    HttpResponse<String> userinfoResponse;
-    try {
-      userinfoResponse = httpClient.send(userinfoRequest, HttpResponse.BodyHandlers.ofString());
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IOException("Interrupted while fetching userinfo", e);
-    }
-    if (userinfoResponse.statusCode() != 200) {
-      throw new IOException("OAuth userinfo request failed with status " + userinfoResponse.statusCode());
-    }
-
-    String id;
-    try {
-      String body = userinfoResponse.body();
-      if (body == null) {
-        throw new IOException("OAuth userinfo response body was null");
-      }
-      JsonObject object = jsonParser.parse(body).getAsJsonObject();
-      if (!object.has("id") || object.get("id").isJsonNull()) {
-        throw new IOException("OAuth userinfo response missing id");
-      }
-      if (!object.get("id").isJsonPrimitive()) {
-        throw new IOException("OAuth userinfo response id is not a primitive");
-      }
-      id = object.get("id").getAsString();
-      if (id.isEmpty()) {
-        throw new IOException("OAuth userinfo response contains empty id");
-      }
-    } catch (JsonParseException | IllegalStateException | UnsupportedOperationException e) {
-      throw new IOException("Failed to parse OAuth userinfo response: " + e.getMessage(), e);
-    }
+    String id = sendAndExtractField(userinfoRequest, "userinfo", "id");
 
     return UserId.fromString(id);
+  }
+
+  private String sendAndExtractField(HttpRequest request, String requestType, String fieldName) throws IOException {
+    HttpResponse<String> response;
+    try {
+      response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException("Interrupted while fetching " + ("token".equals(requestType) ? "OAuth token" : requestType), e);
+    }
+    if (response.statusCode() != 200) {
+      throw new IOException("OAuth " + requestType + " request failed with status " + response.statusCode());
+    }
+
+    try {
+      String body = response.body();
+      if (body == null) {
+        throw new IOException("OAuth " + requestType + " response body was null");
+      }
+      JsonObject object = jsonParser.parse(body).getAsJsonObject();
+      if (!object.has(fieldName) || object.get(fieldName).isJsonNull()) {
+        throw new IOException("OAuth " + requestType + " response missing " + fieldName);
+      }
+      if (!object.get(fieldName).isJsonPrimitive()) {
+        throw new IOException("OAuth " + requestType + " response " + fieldName + " is not a primitive");
+      }
+      String value = object.get(fieldName).getAsString();
+      if (value.isEmpty()) {
+        throw new IOException("OAuth " + requestType + " response contains empty " + fieldName);
+      }
+      return value;
+    } catch (JsonParseException | IllegalStateException | UnsupportedOperationException e) {
+      throw new IOException("Failed to parse OAuth " + requestType + " response: " + e.getMessage(), e);
+    }
   }
 
   private String buildKeyValueString(Map<String, String> parameters, final boolean encode) {
