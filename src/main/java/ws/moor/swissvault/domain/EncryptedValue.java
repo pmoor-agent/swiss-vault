@@ -17,7 +17,6 @@ package ws.moor.swissvault.domain;
 
 
 import com.google.appengine.api.datastore.Text;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.io.BaseEncoding;
 import com.google.gson.JsonArray;
@@ -25,6 +24,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.util.List;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 public class EncryptedValue {
 
@@ -37,16 +38,16 @@ public class EncryptedValue {
   private final byte[] signature;
 
   public EncryptedValue(EncryptionAlgorithm algorithm, byte[] iv, byte[] ciphertext, byte[] signature) {
-    Preconditions.checkArgument(algorithm != null, "algorithm cannot be null");
-    Preconditions.checkArgument(
+    checkArgument(algorithm != null, "algorithm cannot be null");
+    checkArgument(
         iv != null && iv.length == algorithm.getIvLengthBytes(),
         "invalid iv length: %s",
         iv == null ? "null" : iv.length);
-    Preconditions.checkArgument(
+    checkArgument(
         ciphertext != null && ciphertext.length >= algorithm.getMinCiphertextLengthBytes() && ciphertext.length <= MAX_CIPHERTEXT_BYTES,
         "invalid ciphertext length: %s",
         ciphertext == null ? "null" : ciphertext.length);
-    Preconditions.checkArgument(
+    checkArgument(
         signature != null && signature.length == algorithm.getSignatureLengthBytes(),
         "invalid signature length: %s",
         signature == null ? "null" : signature.length);
@@ -73,7 +74,7 @@ public class EncryptedValue {
   }
 
   public static EncryptedValue fromText(Text text) {
-    Preconditions.checkArgument(text != null, "text cannot be null");
+    checkArgument(text != null, "text cannot be null");
     String[] parts = text.getValue().split(":", -1);
     if (parts.length != 5) {
       throw new IllegalArgumentException(text.getValue());
@@ -115,7 +116,7 @@ public class EncryptedValue {
   }
 
   public static EncryptedValue fromJsonObject(JsonObject json) {
-    Preconditions.checkArgument(json != null, "missing encrypted value");
+    checkArgument(json != null, "missing encrypted value");
     checkPrimitiveField(json, "version");
     checkPrimitiveField(json, "algorithm");
     checkPrimitiveField(json, "iv");
@@ -155,42 +156,42 @@ public class EncryptedValue {
   }
 
   private static void checkPrimitiveField(JsonObject json, String fieldName) {
-    Preconditions.checkArgument(
+    checkArgument(
         json.has(fieldName) && json.get(fieldName) != null && json.get(fieldName).isJsonPrimitive(),
         "missing or invalid field: %s",
         fieldName);
   }
 
   public static List<Text> toTextList(List<EncryptedValue> values) {
-    Preconditions.checkArgument(values != null, "missing values list");
+    checkArgument(values != null, "missing values list");
     List<Text> result = Lists.newArrayListWithCapacity(values.size());
     for (EncryptedValue value : values) {
-      Preconditions.checkArgument(value != null, "null value in list");
+      checkArgument(value != null, "null value in list");
       result.add(value.toText());
     }
     return result;
   }
 
   public static List<EncryptedValue> fromTextList(List<Text> texts) {
-    Preconditions.checkArgument(texts != null, "missing texts list");
+    checkArgument(texts != null, "missing texts list");
     List<EncryptedValue> result = Lists.newArrayListWithCapacity(texts.size());
     for (Text text : texts) {
-      Preconditions.checkArgument(text != null, "null text in list");
+      checkArgument(text != null, "null text in list");
       result.add(fromText(text));
     }
     return result;
   }
 
   public static List<EncryptedValue> fromJsonArray(JsonArray encryptions) {
-    Preconditions.checkArgument(encryptions != null, "missing encryptions array");
-    Preconditions.checkArgument(
+    checkArgument(encryptions != null, "missing encryptions array");
+    checkArgument(
         encryptions.size() >= 1 && encryptions.size() <= MAX_ENCRYPTIONS,
         "invalid encryptions count: %s",
         encryptions.size());
     List<EncryptedValue> list = Lists.newArrayListWithCapacity(encryptions.size());
     for (int i = 0; i < encryptions.size(); i++) {
       JsonElement element = encryptions.get(i);
-      Preconditions.checkArgument(element != null && element.isJsonObject(), "invalid encryption entry");
+      checkArgument(element != null && element.isJsonObject(), "invalid encryption entry");
       list.add(fromJsonObject(element.getAsJsonObject()));
     }
     return list;

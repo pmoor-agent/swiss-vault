@@ -16,7 +16,6 @@
 package ws.moor.swissvault.persistence.model;
 
 import com.google.appengine.api.datastore.Entity;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -26,6 +25,8 @@ import ws.moor.swissvault.util.Obfuscator;
 
 import java.util.Date;
 import java.util.List;
+
+import static com.google.common.base.Preconditions.checkState;
 
 public class DbKey {
 
@@ -56,7 +57,7 @@ public class DbKey {
 //  }
 
   public JsonObject toJsonObject(Obfuscator obfuscator, UserId userId) {
-    Preconditions.checkState(!transientAcls.isEmpty(), "cannot serialize a key without any ACLs");
+    checkState(!transientAcls.isEmpty(), "cannot serialize a key without any ACLs");
 
     JsonObject object = new JsonObject();
     object.addProperty("id", obfuscator.obfuscateLong(entity.getKey().getId()));

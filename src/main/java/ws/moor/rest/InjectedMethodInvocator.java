@@ -15,7 +15,6 @@
  */
 package ws.moor.rest;
 
-import com.google.common.base.Preconditions;
 import com.google.inject.BindingAnnotation;
 import com.google.inject.Injector;
 import com.google.inject.Key;
@@ -24,6 +23,8 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 class InjectedMethodInvocator {
   
@@ -46,7 +47,7 @@ class InjectedMethodInvocator {
   private Key[] calculateGuiceKeys(Method method) {
     Type[] parameterTypes = method.getGenericParameterTypes();
     Annotation[][] parameterAnnotations = method.getParameterAnnotations();
-    Preconditions.checkArgument(parameterTypes.length == parameterAnnotations.length);
+    checkArgument(parameterTypes.length == parameterAnnotations.length);
     Key[] keys = new Key[parameterTypes.length];
     for (int i = 0; i < parameterTypes.length; i++) {
       Type type = parameterTypes[i];

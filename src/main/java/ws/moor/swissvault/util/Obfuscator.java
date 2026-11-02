@@ -15,7 +15,6 @@
  */
 package ws.moor.swissvault.util;
 
-import com.google.common.base.Preconditions;
 import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.Longs;
 import com.google.inject.Inject;
@@ -24,6 +23,9 @@ import ws.moor.swissvault.config.Config;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkState;
 
 @Singleton
 public class Obfuscator {
@@ -47,13 +49,13 @@ public class Obfuscator {
   }
 
   public long unobfuscateLong(String obfuscated) {
-    Preconditions.checkArgument(obfuscated != null && obfuscated.length() == 16, "Invalid obfuscated ID: %s", obfuscated);
+    checkArgument(obfuscated != null && obfuscated.length() == 16, "Invalid obfuscated ID: %s", obfuscated);
     byte[] encrypted = encoding.decode(obfuscated);
     try {
       Cipher cipher = Cipher.getInstance("Blowfish/ECB/NoPadding");
       cipher.init(Cipher.DECRYPT_MODE, secret);
       byte[] decrypted = cipher.doFinal(encrypted);
-      Preconditions.checkState(decrypted.length == Longs.BYTES);
+      checkState(decrypted.length == Longs.BYTES);
       return Longs.fromByteArray(decrypted);
     } catch (Exception e) {
       throw new RuntimeException(obfuscated, e);
