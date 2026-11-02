@@ -16,9 +16,13 @@
 
 // All formats ever written stay readable.
 //
-// AES_256_CBC_HMAC_SHA256 (names, descriptions and values, using a key's 32 byte raw secret):
+// AES_256_GCM (names, descriptions and values, using a key's 32 byte raw secret):
+//   12-byte random IV, AES-256-GCM with 128-bit authentication tag. Ciphertext holds the encrypted
+//   bytes and signature holds the 16-byte authentication tag. Written since 2026.
+//
+// AES_256_CBC_HMAC_SHA256 (legacy, names, descriptions and values, using a key's 32 byte raw secret):
 //   AES-256-CBC with PKCS#7 padding and a random 16 byte IV. The signature is HMAC-SHA256 over
-//   iv || cleartext, using the same raw secret as HMAC key. Unchanged since 2012.
+//   iv || cleartext, using the same raw secret as HMAC key. Written until 2026, still read.
 //
 // PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256 (a key's raw secret, wrapped with a passphrase):
 //   as above, keyed with PBKDF2-HMAC-SHA512(utf8(passphrase), salt = iv, 210000 iterations).
@@ -37,7 +41,8 @@
  * @property {string} signature base64
  */
 
-const VALUE_ALGORITHM = 'AES_256_CBC_HMAC_SHA256';
+const VALUE_ALGORITHM = 'AES_256_GCM';
+const LEGACY_VALUE_ALGORITHM = 'AES_256_CBC_HMAC_SHA256';
 const PASSPHRASE_ALGORITHM = 'PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256';
 const LEGACY_PASSPHRASE_ALGORITHM = 'PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256';
 
@@ -60,8 +65,20 @@ export function newRawSecret() {
  * @param {string} cleartext
  * @returns {Promise<EncryptedValue>}
  */
-export function encrypt(rawSecret, cleartext) {
-  return encryptBytes(rawSecret, new TextEncoder().encode(cleartext), VALUE_ALGORITHM, randomIv());
+export async function encrypt(rawSecret, cleartext) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await crypto.subtle.importKey('raw', rawSecret, 'AES-GCM', false, ['encrypt']);
+  const cleartextBytes = new TextEncoder().encode(cleartext);
+  const combined = new Uint8Array(await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, cleartextBytes));
+  const ciphertext = combined.subarray(0, combined.length - 16);
+  const signature = combined.subarray(combined.length - 16);
+  return {
+    version: 0,
+    algorithm: VALUE_ALGORITHM,
+    iv: toBase64(iv),
+    ciphertext: toBase64(ciphertext),
+    signature: toBase64(signature),
+  };
 }
 
 /**
@@ -70,10 +87,24 @@ export function encrypt(rawSecret, cleartext) {
  * @returns {Promise<string>}
  */
 export async function decrypt(rawSecret, value) {
-  if (value.algorithm !== VALUE_ALGORITHM) {
+  if (value.algorithm === VALUE_ALGORITHM) {
+    if (value.version !== 0) {
+      throw new Error('unsupported version: ' + value.version);
+    }
+    const key = await crypto.subtle.importKey('raw', rawSecret, 'AES-GCM', false, ['decrypt']);
+    const combined = concat(fromBase64(value.ciphertext), fromBase64(value.signature));
+    let cleartext;
+    try {
+      cleartext = await crypto.subtle.decrypt({name: 'AES-GCM', iv: fromBase64(value.iv)}, key, combined);
+    } catch (e) {
+      throw new DecryptionError('cannot decrypt');
+    }
+    return new TextDecoder().decode(cleartext);
+  } else if (value.algorithm === LEGACY_VALUE_ALGORITHM) {
+    return new TextDecoder().decode(await decryptBytes(rawSecret, value));
+  } else {
     throw new Error('unsupported algorithm: ' + value.algorithm);
   }
-  return new TextDecoder().decode(await decryptBytes(rawSecret, value));
 }
 
 /**

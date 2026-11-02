@@ -17,18 +17,22 @@ package ws.moor.swissvault.domain;
 
 public enum EncryptionAlgorithm {
   /** Legacy: a key's raw secret, wrapped with PBKDF2-HMAC-SHA1 (1000 iterations). Still read, no longer written. */
-  PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256(16, 32),
+  PBKDF2_SHA1_AES_256_CBC_HMAC_SHA256(16, 32, 1),
   /** A key's raw secret, wrapped with PBKDF2-HMAC-SHA512 (210000 iterations). */
-  PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256(16, 32),
-  /** Names, descriptions and values, encrypted with a key's raw secret. */
-  AES_256_CBC_HMAC_SHA256(16, 32);
+  PBKDF2_SHA512_210000_AES_256_CBC_HMAC_SHA256(16, 32, 1),
+  /** Legacy: names, descriptions and values, encrypted with a key's raw secret. Still read, no longer written. */
+  AES_256_CBC_HMAC_SHA256(16, 32, 1),
+  /** Names, descriptions and values, encrypted with AES-256-GCM. */
+  AES_256_GCM(12, 16, 0);
 
   private final int ivLengthBytes;
   private final int signatureLengthBytes;
+  private final int minCiphertextLengthBytes;
 
-  EncryptionAlgorithm(int ivLengthBytes, int signatureLengthBytes) {
+  EncryptionAlgorithm(int ivLengthBytes, int signatureLengthBytes, int minCiphertextLengthBytes) {
     this.ivLengthBytes = ivLengthBytes;
     this.signatureLengthBytes = signatureLengthBytes;
+    this.minCiphertextLengthBytes = minCiphertextLengthBytes;
   }
 
   public int getIvLengthBytes() {
@@ -37,5 +41,9 @@ public enum EncryptionAlgorithm {
 
   public int getSignatureLengthBytes() {
     return signatureLengthBytes;
+  }
+
+  public int getMinCiphertextLengthBytes() {
+    return minCiphertextLengthBytes;
   }
 }

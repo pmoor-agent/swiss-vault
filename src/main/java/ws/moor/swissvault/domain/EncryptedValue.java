@@ -43,7 +43,7 @@ public class EncryptedValue {
         "invalid iv length: %s",
         iv == null ? "null" : iv.length);
     Preconditions.checkArgument(
-        ciphertext != null && ciphertext.length > 0 && ciphertext.length <= MAX_CIPHERTEXT_BYTES,
+        ciphertext != null && ciphertext.length >= algorithm.getMinCiphertextLengthBytes() && ciphertext.length <= MAX_CIPHERTEXT_BYTES,
         "invalid ciphertext length: %s",
         ciphertext == null ? "null" : ciphertext.length);
     Preconditions.checkArgument(
@@ -74,7 +74,7 @@ public class EncryptedValue {
 
   public static EncryptedValue fromText(Text text) {
     Preconditions.checkArgument(text != null, "text cannot be null");
-    String[] parts = text.getValue().split(":");
+    String[] parts = text.getValue().split(":", -1);
     if (parts.length != 5) {
       throw new IllegalArgumentException(text.getValue());
     }
