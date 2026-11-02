@@ -15,9 +15,12 @@
  */
 package ws.moor.rest;
 
+import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.google.inject.Provider;
@@ -25,12 +28,14 @@ import com.google.inject.servlet.RequestScoped;
 import ws.moor.rest.annotations.Execute;
 import ws.moor.rest.annotations.PostFilter;
 import ws.moor.rest.annotations.PreFilter;
+import ws.moor.swissvault.domain.KeyNotFoundException;
+import ws.moor.swissvault.domain.PermissionDeniedException;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RequestScoped
@@ -60,6 +65,8 @@ class RestCallInvocator {
     Method method = findAnnotatedMethod(actionClass, Execute.class);
     Preconditions.checkNotNull(method);
 
+    Object result = null;
+    Throwable caughtException = null;
     try {
       for (Class<? extends RestFilter> filterClass : filters) {
         RestFilter filter = injector.getInstance(filterClass);
@@ -68,34 +75,73 @@ class RestCallInvocator {
           new InjectedMethodInvocator(preFilterMethod).invoke(injector, filter);
         }
       }
-    
-      Object result = new InjectedMethodInvocator(method).invoke(injector, actionProvider.get());
 
+      result = new InjectedMethodInvocator(method).invoke(injector, actionProvider.get());
+    } catch (Throwable t) {
+      caughtException = t;
+    } finally {
       for (Class<? extends RestFilter> filterClass : filters) {
         RestFilter filter = injector.getInstance(filterClass);
         Method postFilterMethod = findAnnotatedMethod(filterClass, PostFilter.class);
         if (postFilterMethod != null) {
-          new InjectedMethodInvocator(postFilterMethod).invoke(injector, filter);
+          try {
+            new InjectedMethodInvocator(postFilterMethod).invoke(injector, filter);
+          } catch (Throwable postFilterError) {
+            if (caughtException != null) {
+              caughtException.addSuppressed(postFilterError);
+            } else {
+              caughtException = postFilterError;
+            }
+          }
         }
       }
-      
+    }
+
+    if (caughtException != null) {
+      handleException(caughtException);
+      return;
+    }
+
+    writeResponse(result);
+  }
+
+  private void handleException(Throwable t) {
+    Throwable cause = Throwables.getRootCause(t);
+    try {
+      if (cause instanceof PermissionDeniedException) {
+        response.sendError(HttpServletResponse.SC_FORBIDDEN, cause.getMessage());
+      } else if (cause instanceof EntityNotFoundException || cause instanceof KeyNotFoundException) {
+        response.sendError(HttpServletResponse.SC_NOT_FOUND, cause.getMessage());
+      } else if (cause instanceof IllegalArgumentException
+          || cause instanceof JsonParseException
+          || cause instanceof IllegalStateException) {
+        response.sendError(HttpServletResponse.SC_BAD_REQUEST, cause.getMessage());
+      } else {
+        Throwables.throwIfUnchecked(cause);
+        throw new RuntimeException(cause);
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private void writeResponse(Object result) {
+    try {
       if (result == null) {
         response.setStatus(HttpServletResponse.SC_NO_CONTENT);
       } else if (result instanceof JsonArray) {
         JsonArray array = (JsonArray) result;
         response.setStatus(HttpServletResponse.SC_OK);
-        response.getOutputStream().write(array.toString().getBytes());
+        response.setContentType("application/json; charset=utf-8");
+        response.getOutputStream().write(array.toString().getBytes(StandardCharsets.UTF_8));
       } else if (result instanceof JsonObject) {
         JsonObject object = (JsonObject) result;
         response.setStatus(HttpServletResponse.SC_OK);
-        response.getOutputStream().write(object.toString().getBytes());
+        response.setContentType("application/json; charset=utf-8");
+        response.getOutputStream().write(object.toString().getBytes(StandardCharsets.UTF_8));
       } else {
         throw new RuntimeException("unknown response type: " + result.getClass());
       }
-    } catch (IllegalAccessException e) {
-      throw new RuntimeException(e);
-    } catch (InvocationTargetException e) {
-      throw new RuntimeException(e);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

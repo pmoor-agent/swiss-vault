@@ -80,7 +80,7 @@ public abstract class RestServletModule extends AbstractModule {
     filters.add(getFilterMatcher(filter));
   }
 
-  private FilterMatcher getFilterMatcher(Class<? extends RestFilter> filter) {
+  FilterMatcher getFilterMatcher(Class<? extends RestFilter> filter) {
     Set<Annotation> annotations = Sets.newHashSet(filter.getAnnotations());
     Iterable<Annotation> filterAnnotations = Iterables.filter(
         annotations, new Predicate<Annotation>() {
@@ -231,7 +231,7 @@ public abstract class RestServletModule extends AbstractModule {
     }
   }
   
-  private static class FilterMatcher {
+  static class FilterMatcher {
 
     private final Class<? extends RestFilter> filterClass;
     private final Set<Class<? extends Annotation>> annotationTypes;
@@ -242,7 +242,11 @@ public abstract class RestServletModule extends AbstractModule {
     }
 
     boolean applies(Class<? extends RestAction> actionClass) {
-      // TODO(pmoor): implement
+      for (Class<? extends Annotation> annotationType : annotationTypes) {
+        if (!actionClass.isAnnotationPresent(annotationType)) {
+          return false;
+        }
+      }
       return true;
     }
   }
