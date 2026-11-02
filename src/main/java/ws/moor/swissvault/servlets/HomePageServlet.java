@@ -17,7 +17,6 @@ package ws.moor.swissvault.servlets;
 
 import com.google.common.base.Optional;
 import com.google.common.io.Resources;
-import com.google.common.net.HttpHeaders;
 import com.google.common.net.MediaType;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
@@ -50,12 +49,6 @@ public class HomePageServlet extends HttpServlet {
 
   @Override
   protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-    // see rfc6797 for explanation of header
-    resp.addHeader(HttpHeaders.STRICT_TRANSPORT_SECURITY, "max-age=7776000; includeSubDomains");  // 90 days
-    // only our own scripts and styles, no inline code: limits the damage any injected content could do
-    resp.addHeader(HttpHeaders.CONTENT_SECURITY_POLICY, "default-src 'none'; script-src 'self'; style-src 'self'; "
-        + "connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
-
     if (userIdProvider.get().isPresent()) {
       resp.setContentType(MediaType.HTML_UTF_8.toString());
       resp.setCharacterEncoding(UTF_8.name().toLowerCase());

@@ -24,6 +24,7 @@ import ws.moor.swissvault.auth.AuthModule;
 import ws.moor.swissvault.config.ConfigurationModule;
 import ws.moor.swissvault.rest.RestApiModule;
 import ws.moor.swissvault.servlets.HomePageModule;
+import ws.moor.swissvault.servlets.SecurityHeadersModule;
 
 public class Listener extends GuiceServletContextListener {
 
@@ -33,6 +34,7 @@ public class Listener extends GuiceServletContextListener {
         new AppEngineModule(),
         new ConfigurationModule(),
         new RestApiModule(),
+        new SecurityHeadersModule(),
         new HomePageModule(),
         new AuthModule(),
         new ClockModule());

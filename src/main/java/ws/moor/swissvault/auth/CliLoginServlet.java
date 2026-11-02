@@ -74,26 +74,15 @@ class CliLoginServlet extends HttpServlet {
 
     PrintWriter out = resp.getWriter();
     out.println("<!doctype html>");
-    out.println("<html><head><meta charset=\"utf-8\"><title>Swiss Vault - CLI Login</title>");
-    out.println("<style>");
-    out.println("body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; margin: 0; padding: 40px 20px; }");
-    out.println(".container { max-width: 520px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }");
-    out.println("h2 { margin-top: 0; color: #333; }");
-    out.println("p { color: #555; line-height: 1.5; }");
-    out.println(".user { background: #e8f0fe; color: #1a73e8; padding: 4px 8px; border-radius: 4px; font-weight: bold; }");
-    out.println(".meta { font-size: 13px; color: #5f6368; margin-top: 16px; margin-bottom: 4px; }");
-    out.println(".expiration { font-weight: 600; color: #d93025; }");
-    out.println(".token-box { width: 100%; height: 70px; font-family: monospace; font-size: 13px; margin-top: 8px; box-sizing: border-box; padding: 10px; background: #f8f9fa; border: 1px solid #dadce0; border-radius: 4px; word-break: break-all; }");
-    out.println("</style>");
-    out.println("</head><body>");
-    out.println("<div class=\"container\">");
+    out.println("<html><head><meta charset=\"utf-8\"><title>Swiss Vault - CLI Login</title></head>");
+    out.println("<body>");
     out.println("<h2>CLI Authentication Token</h2>");
-    out.println("<p>Logged in as <span class=\"user\">" + escapeHtml(userId.get().asString()) + "</span></p>");
+    out.println("<p>Logged in as " + escapeHtml(userId.get().asString()) + "</p>");
     out.println("<p>Copy and paste this token into your terminal:</p>");
-    out.println("<textarea readonly class=\"token-box\" onclick=\"this.select()\">" + escapeHtml(authValue) + "</textarea>");
-    out.println("<p class=\"meta\"><strong>Expires:</strong> <span class=\"expiration\">" + escapeHtml(expiresAtFormatted) + "</span> (valid for " + expirationMinutes + " minutes)</p>");
-    out.println("<p class=\"meta\">Note: This is a short-lived session token. You will need to log in again once it expires.</p>");
-    out.println("</div></body></html>");
+    out.println("<textarea readonly rows=\"4\" cols=\"80\">" + escapeHtml(authValue) + "</textarea>");
+    out.println("<p><strong>Expires:</strong> " + escapeHtml(expiresAtFormatted) + " (valid for " + expirationMinutes + " minutes)</p>");
+    out.println("<p>Note: This is a short-lived session token. You will need to log in again once it expires.</p>");
+    out.println("</body></html>");
   }
 
   private static String escapeHtml(String text) {
