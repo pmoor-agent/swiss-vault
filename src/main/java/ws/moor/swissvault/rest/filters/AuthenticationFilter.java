@@ -15,6 +15,7 @@
  */
 package ws.moor.swissvault.rest.filters;
 
+import com.google.common.net.MediaType;
 import com.google.inject.Inject;
 import ws.moor.rest.RestAction;
 import ws.moor.rest.RestFilter;
@@ -30,7 +31,7 @@ public class AuthenticationFilter implements RestFilter {
   private final AclService aclService;
 
   @Inject
-  private AuthenticationFilter(
+  AuthenticationFilter(
       @Config("secure_only") boolean secureOnly,
       AclService aclService) {
     this.secureOnly = secureOnly;
@@ -43,11 +44,36 @@ public class AuthenticationFilter implements RestFilter {
       throw new PermissionDeniedException("only https supported");
     }
 
+    String secFetchSite = request.getHeader("Sec-Fetch-Site");
+    if (secFetchSite != null
+        && !"same-origin".equalsIgnoreCase(secFetchSite)
+        && !"none".equalsIgnoreCase(secFetchSite)) {
+      throw new PermissionDeniedException("cross-site request rejected");
+    }
+
+    String method = request.getMethod();
+    if ("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)) {
+      if (!isJsonContentType(request.getContentType())) {
+        throw new PermissionDeniedException("application/json content type required");
+      }
+    }
+
     AuthorizationRequired annotation = actionClass.getAnnotation(AuthorizationRequired.class);
     if (annotation == null) {
       throw new PermissionDeniedException("no authorization annotation");
     }
 
     annotation.type().assertAllowed(aclService);
+  }
+
+  private static boolean isJsonContentType(String contentType) {
+    if (contentType == null) {
+      return false;
+    }
+    try {
+      return MediaType.parse(contentType).withoutParameters().is(MediaType.JSON_UTF_8.withoutParameters());
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
   }
 }
