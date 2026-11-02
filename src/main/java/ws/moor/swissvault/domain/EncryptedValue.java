@@ -17,14 +17,19 @@ package ws.moor.swissvault.domain;
 
 
 import com.google.appengine.api.datastore.Text;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.io.BaseEncoding;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.util.List;
 
 public class EncryptedValue {
+
+  public static final int MAX_CIPHERTEXT_BYTES = 64 * 1024;
+  public static final int MAX_ENCRYPTIONS = 16;
 
   private final EncryptionAlgorithm algorithm;
   private final byte[] iv;
@@ -32,13 +37,43 @@ public class EncryptedValue {
   private final byte[] signature;
 
   public EncryptedValue(EncryptionAlgorithm algorithm, byte[] iv, byte[] ciphertext, byte[] signature) {
+    Preconditions.checkArgument(algorithm != null, "algorithm cannot be null");
+    Preconditions.checkArgument(
+        iv != null && iv.length == algorithm.getIvLengthBytes(),
+        "invalid iv length: %s",
+        iv == null ? "null" : iv.length);
+    Preconditions.checkArgument(
+        ciphertext != null && ciphertext.length > 0 && ciphertext.length <= MAX_CIPHERTEXT_BYTES,
+        "invalid ciphertext length: %s",
+        ciphertext == null ? "null" : ciphertext.length);
+    Preconditions.checkArgument(
+        signature != null && signature.length == algorithm.getSignatureLengthBytes(),
+        "invalid signature length: %s",
+        signature == null ? "null" : signature.length);
     this.algorithm = algorithm;
     this.iv = iv;
     this.ciphertext = ciphertext;
     this.signature = signature;
   }
 
+  public EncryptionAlgorithm getAlgorithm() {
+    return algorithm;
+  }
+
+  public byte[] getIv() {
+    return iv.clone();
+  }
+
+  public byte[] getCiphertext() {
+    return ciphertext.clone();
+  }
+
+  public byte[] getSignature() {
+    return signature.clone();
+  }
+
   public static EncryptedValue fromText(Text text) {
+    Preconditions.checkArgument(text != null, "text cannot be null");
     String[] parts = text.getValue().split(":");
     if (parts.length != 5) {
       throw new IllegalArgumentException(text.getValue());
@@ -46,7 +81,12 @@ public class EncryptedValue {
     if (!parts[0].equals("0")) {
       throw new IllegalArgumentException(text.getValue());
     }
-    EncryptionAlgorithm algorithm = EncryptionAlgorithm.valueOf(parts[1]);
+    EncryptionAlgorithm algorithm;
+    try {
+      algorithm = EncryptionAlgorithm.valueOf(parts[1]);
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("unknown algorithm: " + parts[1], e);
+    }
 
     byte[] iv = BaseEncoding.base64().decode(parts[2]);
     byte[] ciphertext = BaseEncoding.base64().decode(parts[3]);
@@ -75,37 +115,83 @@ public class EncryptedValue {
   }
 
   public static EncryptedValue fromJsonObject(JsonObject json) {
-    int version = json.getAsJsonPrimitive("version").getAsInt();
+    Preconditions.checkArgument(json != null, "missing encrypted value");
+    checkPrimitiveField(json, "version");
+    checkPrimitiveField(json, "algorithm");
+    checkPrimitiveField(json, "iv");
+    checkPrimitiveField(json, "ciphertext");
+    checkPrimitiveField(json, "signature");
+
+    int version;
+    try {
+      version = json.getAsJsonPrimitive("version").getAsInt();
+    } catch (ClassCastException | NumberFormatException | UnsupportedOperationException e) {
+      throw new IllegalArgumentException("invalid version format", e);
+    }
     if (version != 0) {
       throw new IllegalArgumentException("unknown version: " + version);
     }
-    EncryptionAlgorithm algorithm = EncryptionAlgorithm.valueOf(json.getAsJsonPrimitive("algorithm").getAsString());
-    byte[] iv = BaseEncoding.base64().decode(json.getAsJsonPrimitive("iv").getAsString());
-    byte[] ciphertext = BaseEncoding.base64().decode(json.getAsJsonPrimitive("ciphertext").getAsString());
-    byte[] signature = BaseEncoding.base64().decode(json.getAsJsonPrimitive("signature").getAsString());
+
+    String algorithmName = json.getAsJsonPrimitive("algorithm").getAsString();
+    EncryptionAlgorithm algorithm;
+    try {
+      algorithm = EncryptionAlgorithm.valueOf(algorithmName);
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("unknown algorithm: " + algorithmName, e);
+    }
+
+    byte[] iv;
+    byte[] ciphertext;
+    byte[] signature;
+    try {
+      iv = BaseEncoding.base64().decode(json.getAsJsonPrimitive("iv").getAsString());
+      ciphertext = BaseEncoding.base64().decode(json.getAsJsonPrimitive("ciphertext").getAsString());
+      signature = BaseEncoding.base64().decode(json.getAsJsonPrimitive("signature").getAsString());
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("invalid base64 encoding", e);
+    }
+
     return new EncryptedValue(algorithm, iv, ciphertext, signature);
   }
 
+  private static void checkPrimitiveField(JsonObject json, String fieldName) {
+    Preconditions.checkArgument(
+        json.has(fieldName) && json.get(fieldName) != null && json.get(fieldName).isJsonPrimitive(),
+        "missing or invalid field: %s",
+        fieldName);
+  }
+
   public static List<Text> toTextList(List<EncryptedValue> values) {
-    List<Text> result = Lists.newArrayList();
+    Preconditions.checkArgument(values != null, "missing values list");
+    List<Text> result = Lists.newArrayListWithCapacity(values.size());
     for (EncryptedValue value : values) {
+      Preconditions.checkArgument(value != null, "null value in list");
       result.add(value.toText());
     }
     return result;
   }
 
   public static List<EncryptedValue> fromTextList(List<Text> texts) {
-    List<EncryptedValue> result = Lists.newArrayList();
+    Preconditions.checkArgument(texts != null, "missing texts list");
+    List<EncryptedValue> result = Lists.newArrayListWithCapacity(texts.size());
     for (Text text : texts) {
+      Preconditions.checkArgument(text != null, "null text in list");
       result.add(fromText(text));
     }
     return result;
   }
 
   public static List<EncryptedValue> fromJsonArray(JsonArray encryptions) {
-    List<EncryptedValue> list = Lists.newArrayList();
+    Preconditions.checkArgument(encryptions != null, "missing encryptions array");
+    Preconditions.checkArgument(
+        encryptions.size() >= 1 && encryptions.size() <= MAX_ENCRYPTIONS,
+        "invalid encryptions count: %s",
+        encryptions.size());
+    List<EncryptedValue> list = Lists.newArrayListWithCapacity(encryptions.size());
     for (int i = 0; i < encryptions.size(); i++) {
-      list.add(fromJsonObject(encryptions.get(i).getAsJsonObject()));
+      JsonElement element = encryptions.get(i);
+      Preconditions.checkArgument(element != null && element.isJsonObject(), "invalid encryption entry");
+      list.add(fromJsonObject(element.getAsJsonObject()));
     }
     return list;
   }

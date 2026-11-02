@@ -18,7 +18,9 @@ package ws.moor.rest;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.google.inject.AbstractModule;
 import com.google.inject.Injector;
@@ -28,13 +30,13 @@ import com.google.inject.servlet.RequestScoped;
 import ws.moor.rest.annotations.RequestBody;
 
 import javax.servlet.http.HttpServletRequest;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class RestModule extends AbstractModule {
+
+  public static final int MAX_REQUEST_BODY_BYTES = 128 * 1024;
 
   @Override
   protected void configure() {}
@@ -43,23 +45,47 @@ public class RestModule extends AbstractModule {
   @Provides
   @RequestBody
   String provideRequestBody(HttpServletRequest request) throws IOException {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    ByteStreams.copy(request.getInputStream(), baos);
-    return new String(baos.toByteArray(), Charset.defaultCharset());
+    byte[] bytes = ByteStreams.toByteArray(ByteStreams.limit(request.getInputStream(), MAX_REQUEST_BODY_BYTES + 1));
+    if (bytes.length > MAX_REQUEST_BODY_BYTES) {
+      throw new IllegalArgumentException("Request body exceeds maximum size of " + MAX_REQUEST_BODY_BYTES + " bytes");
+    }
+    return new String(bytes, StandardCharsets.UTF_8);
   }
   
   @RequestScoped
   @Provides
   @RequestBody
-  JsonArray provideRequestArray(JsonParser jsonParser, HttpServletRequest request) throws IOException {
-    return jsonParser.parse(new InputStreamReader(request.getInputStream())).getAsJsonArray();
+  JsonArray provideRequestArray(JsonParser jsonParser, @RequestBody String requestBody) {
+    if (requestBody == null) {
+      throw new IllegalArgumentException("Request body cannot be null");
+    }
+    try {
+      JsonElement element = jsonParser.parse(requestBody);
+      if (element != null && element.isJsonArray()) {
+        return element.getAsJsonArray();
+      }
+      throw new IllegalArgumentException("Expected JSON array in request body");
+    } catch (JsonParseException e) {
+      throw new IllegalArgumentException("Malformed JSON in request body", e);
+    }
   }
 
   @RequestScoped
   @Provides
   @RequestBody
-  JsonObject provideRequestObject(JsonParser jsonParser, HttpServletRequest request) throws IOException {
-    return jsonParser.parse(new InputStreamReader(request.getInputStream())).getAsJsonObject();
+  JsonObject provideRequestObject(JsonParser jsonParser, @RequestBody String requestBody) {
+    if (requestBody == null) {
+      throw new IllegalArgumentException("Request body cannot be null");
+    }
+    try {
+      JsonElement element = jsonParser.parse(requestBody);
+      if (element != null && element.isJsonObject()) {
+        return element.getAsJsonObject();
+      }
+      throw new IllegalArgumentException("Expected JSON object in request body");
+    } catch (JsonParseException e) {
+      throw new IllegalArgumentException("Malformed JSON in request body", e);
+    }
   }
   
   @RequestScoped
