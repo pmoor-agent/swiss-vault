@@ -81,12 +81,11 @@ public class KeyRepository {
 
   public void delete(Transaction transaction, long keyId) {
     Key secretKeyKey = KeyFactory.createKey("Key", keyId);
-    ds.delete(transaction, secretKeyKey);
-
-    Query q = new Query("KeyAcl", secretKeyKey);
+    Query q = new Query(secretKeyKey);
     q.setKeysOnly();
     PreparedQuery pq = ds.prepare(transaction, q);
     Set<Key> keys = new HashSet<Key>();
+    keys.add(secretKeyKey);
     for (Entity entity : pq.asIterable()) {
       keys.add(entity.getKey());
     }
