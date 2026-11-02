@@ -21,6 +21,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.util.Random;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
 
 public class ObfuscatorTest {
   @Test
@@ -60,6 +61,34 @@ public class ObfuscatorTest {
     assertObfuscatesTo(-7610100052787030355L, "00b2d1e7dbd2b7c7");
     assertObfuscatesTo(-6306291253572087852L, "000bafb16f27334a");
     assertObfuscatesTo(-1133199824324347252L, "00009cec374c1381");
+  }
+
+  @Test
+  public void unobfuscateLong_invalidInputsThrowIllegalArgumentException() {
+    Obfuscator obfuscator = new Obfuscator(new SecretKeySpec(new byte[] {1, 2, 3, 4, 5, 6, 7, 8}, "Blowfish"));
+    String validHex = obfuscator.obfuscateLong(0L); // "1bfed93fc7d99b9e"
+
+    // null
+    assertThrows(IllegalArgumentException.class, () -> obfuscator.unobfuscateLong(null));
+
+    // empty string
+    assertThrows(IllegalArgumentException.class, () -> obfuscator.unobfuscateLong(""));
+
+    // short hex strings
+    assertThrows(IllegalArgumentException.class, () -> obfuscator.unobfuscateLong("01234567"));
+    assertThrows(IllegalArgumentException.class, () -> obfuscator.unobfuscateLong("1bfed93fc7d99b9"));
+
+    // multi-block hex strings
+    assertThrows(IllegalArgumentException.class, () -> obfuscator.unobfuscateLong(validHex + validHex));
+    assertThrows(IllegalArgumentException.class, () -> obfuscator.unobfuscateLong(validHex + validHex + validHex));
+
+    // uppercase hex characters
+    assertThrows(IllegalArgumentException.class, () -> obfuscator.unobfuscateLong(validHex.toUpperCase()));
+
+    // non-hex characters of length 16
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> obfuscator.unobfuscateLong("0123456789abcdef".replace('f', 'g')));
   }
 
   private void assertObfuscatesTo(long original, String expectedObfuscation) {
