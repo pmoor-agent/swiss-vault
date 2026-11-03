@@ -52,8 +52,68 @@ const PASSPHRASE_KEY_DERIVATIONS = {
   [LEGACY_PASSPHRASE_ALGORITHM]: {hash: 'SHA-1', iterations: 1000},
 };
 
+const LOWERCASE = 'abcdefghijklmnopqrstuvwxyz';
+const UPPERCASE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const DIGITS = '0123456789';
+const SPECIAL = '!@#$%^&*()-_=+[]{}|;:,.<>?';
+
 /** Thrown when a value cannot be decrypted with the given key: wrong key, or tampered data. */
 export class DecryptionError extends Error {}
+
+/**
+ * Returns an unbiased cryptographically secure random integer in [0, max).
+ *
+ * @param {number} max
+ * @returns {number}
+ */
+function randomInt(max) {
+  const limit = Math.floor(0x100000000 / max) * max;
+  const buffer = new Uint32Array(1);
+  while (true) {
+    crypto.getRandomValues(buffer);
+    if (buffer[0] < limit) {
+      return buffer[0] % max;
+    }
+  }
+}
+
+/**
+ * Generates a cryptographically secure random password.
+ *
+ * @param {number} length
+ * @param {boolean} [includeSpecial]
+ * @returns {string}
+ */
+export function generateRandomPassword(length, includeSpecial = false) {
+  const categories = [LOWERCASE, UPPERCASE, DIGITS];
+  if (includeSpecial) {
+    categories.push(SPECIAL);
+  }
+  const allChars = categories.join('');
+  const chars = [];
+
+  if (length >= categories.length) {
+    for (const cat of categories) {
+      chars.push(cat[randomInt(cat.length)]);
+    }
+    while (chars.length < length) {
+      chars.push(allChars[randomInt(allChars.length)]);
+    }
+    // Fisher-Yates shuffle
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = randomInt(i + 1);
+      const tmp = chars[i];
+      chars[i] = chars[j];
+      chars[j] = tmp;
+    }
+  } else {
+    for (let i = 0; i < length; i++) {
+      chars.push(allChars[randomInt(allChars.length)]);
+    }
+  }
+
+  return chars.join('');
+}
 
 /** @returns {Uint8Array<ArrayBuffer>} a new random raw secret for a key */
 export function newRawSecret() {

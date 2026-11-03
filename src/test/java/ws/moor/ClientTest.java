@@ -373,6 +373,73 @@ public class ClientTest {
     assertThat(page.locator(".secretListItem:visible input.secretNameEdit")).isFocused();
   }
 
+  @Test
+  public void generatesPasswords() throws Exception {
+    importLegacyData();
+    openKey("correct horse battery staple", "Family");
+    Locator mail = secretItem("Mail");
+    expandProperties(mail, 2);
+    Locator password = propertyItem(mail, "password");
+    button(password, "edit").click();
+
+    // Click "generate" to open the generator modal
+    button(password, "generate").click();
+    Locator generator = dialog("Generate Password");
+    assertThat(generator).isVisible();
+
+    // Check default length is 12 and slider is 12
+    Locator lengthSlider = generator.locator("input[type=range]");
+    assertThat(lengthSlider).hasValue("12");
+    assertThat(generator.locator(".lengthDisplay")).hasText("12");
+
+    // Check special characters checkbox is unchecked by default
+    Locator specialCheckbox = generator.locator("input[type=checkbox]");
+    assertThat(specialCheckbox).not().isChecked();
+
+    // Check generated password is 12 characters and alphanumeric (no special characters)
+    Locator passwordInput = generator.locator("input.generatedPassword");
+    String initialPassword = passwordInput.inputValue();
+    assertThat(initialPassword).matches("^[A-Za-z0-9]{12}$");
+
+    // Regenerate produces another password
+    button(generator, "regenerate").click();
+    String regeneratedPassword = passwordInput.inputValue();
+    assertThat(regeneratedPassword).matches("^[A-Za-z0-9]{12}$");
+
+    // Changing slider updates length and password
+    lengthSlider.evaluate("el => { el.value = 16; el.dispatchEvent(new Event('input', {bubbles: true})); }");
+    assertThat(generator.locator(".lengthDisplay")).hasText("16");
+    String length16Password = passwordInput.inputValue();
+    assertThat(length16Password).matches("^[A-Za-z0-9]{16}$");
+
+    // Toggling special characters generates password with special characters
+    specialCheckbox.check();
+    String specialPassword = passwordInput.inputValue();
+    assertThat(specialPassword).hasLength(16);
+    assertThat(specialPassword).matches(".*[!@#$%^&*()\\-_=+\\[\\]{}|;:,.<>?].*");
+
+    // Cancelling leaves propertyValueEdit unchanged
+    button(generator, "cancel").click();
+    assertThat(page.locator("dialog[open]")).hasCount(0);
+    assertThat(password.locator("input.propertyValueEdit")).hasValue("hunter2 äöü 🔑");
+
+    // Generate again and insert
+    button(password, "generate").click();
+    generator = dialog("Generate Password");
+    String toInsert = generator.locator("input.generatedPassword").inputValue();
+    button(generator, "insert").click();
+    assertThat(page.locator("dialog[open]")).hasCount(0);
+    assertThat(password.locator("input.propertyValueEdit")).hasValue(toInsert);
+
+    // Save and verify persisted
+    button(password, "save property").click();
+    assertThat(password.locator("div.propertyValue")).hasText(toInsert);
+
+    // Re-read after page reload
+    openKey("correct horse battery staple", "Family");
+    assertThat(expandProperties(secretItem("Mail"), 2).get("password")).isEqualTo(toInsert);
+  }
+
   /**
    * Records everything the browser sends during a session that touches every feature, and checks that
    * none of the passphrases, names, descriptions or values ever leave the browser.

@@ -15,7 +15,7 @@
 */
 
 import * as api from './api.js';
-import {showExport} from './dialogs.js';
+import {generatePassword, showExport} from './dialogs.js';
 import {button, h} from './dom.js';
 
 /** @typedef {import('./key.js').Key} Key */
@@ -206,9 +206,16 @@ class PropertyPane {
 
     this.nameInput = h('input', {type: 'text', class: 'propertyName propertyNameEdit'});
     this.valueInput = h('input', {type: 'text', class: 'propertyValue propertyValueEdit'});
+    this.generateButton = button('generate', async () => {
+      const password = await generatePassword();
+      if (password !== null) {
+        this.valueInput.value = password;
+        this.valueInput.focus();
+      }
+    }, 'button');
     this.deleteButton = button('delete property', () => this.delete(), 'button');
     this.editableFields = h('div', {},
-        this.nameInput, this.valueInput, button('save property', () => this.save(), 'button'));
+        this.nameInput, this.valueInput, this.generateButton, button('save property', () => this.save(), 'button'));
 
     this.element = h('li', {class: 'propertyListItem'});
     if (this.property) {
