@@ -127,6 +127,23 @@ dialog::backdrop {
   max-width: 100%;
 }
 
+.generatorRow {
+  margin: 6px 0px;
+}
+
+.generatorActions {
+  margin-top: 10px;
+}
+
+.lengthDisplay {
+  font-weight: bold;
+}
+
+.generatedPassword {
+  font-family: monospace;
+  font-size: 110%;
+}
+
 .link {
   background: none;
   border: none;

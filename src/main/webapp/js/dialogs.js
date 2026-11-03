@@ -15,7 +15,7 @@
 */
 
 import * as api from './api.js';
-import {isLegacyEncryption} from './crypto.js';
+import {generateRandomPassword, isLegacyEncryption} from './crypto.js';
 import {Dialog, button, h} from './dom.js';
 import {Key} from './key.js';
 
@@ -224,4 +224,64 @@ export async function showExport(key) {
     textarea.value = JSON.stringify(data, null, 2);
   }
   download.disabled = false;
+}
+
+/** @returns {Promise<string | null>} the generated password, or null if cancelled */
+export function generatePassword() {
+  return new Promise(resolve => {
+    const dialog = new Dialog('Generate Password');
+    const passwordInput = h('input', {
+      type: 'text',
+      size: '24',
+      name: 'password',
+      readonly: '',
+      class: 'generatedPassword',
+      'aria-label': 'Generated password',
+    });
+    const lengthDisplay = h('span', {class: 'lengthDisplay'}, '12');
+    const lengthSlider = h('input', {
+      type: 'range',
+      min: '4',
+      max: '64',
+      value: '12',
+      name: 'length',
+      'aria-label': 'Password length',
+    });
+    const specialCheckbox = h('input', {type: 'checkbox', name: 'special'});
+
+    const update = () => {
+      const length = parseInt(lengthSlider.value, 10);
+      const special = specialCheckbox.checked;
+      passwordInput.value = generateRandomPassword(length, special);
+    };
+
+    lengthSlider.addEventListener('input', () => {
+      lengthDisplay.textContent = lengthSlider.value;
+      update();
+    });
+    specialCheckbox.addEventListener('change', update);
+
+    const form = h('form', {},
+        h('div', {class: 'generatorRow'}, passwordInput, ' ', button('regenerate', update, 'dialog-button')),
+        h('div', {class: 'generatorRow'}, h('label', {}, 'Length: ', lengthDisplay, h('br'), lengthSlider)),
+        h('div', {class: 'generatorRow'}, h('label', {}, specialCheckbox, ' Special characters')),
+        h('div', {class: 'generatorActions'},
+            h('input', {type: 'submit', value: 'insert'}), ' ',
+            button('cancel', () => {
+              dialog.close();
+              resolve(null);
+            }, 'dialog-button')));
+
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      dialog.close();
+      resolve(passwordInput.value);
+    });
+
+    dialog.content.append(form);
+    update();
+    dialog.show();
+    passwordInput.focus();
+    passwordInput.select();
+  });
 }
