@@ -90,6 +90,7 @@ export function generateRandomPassword(length, includeSpecial = false) {
     categories.push(SPECIAL);
   }
   const allChars = categories.join('');
+  /** @type {string[]} */
   const chars = [];
 
   if (length >= categories.length) {
